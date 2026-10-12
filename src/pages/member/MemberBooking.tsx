@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react';
-import { CalendarDays, Users, Clock, MapPin, ChevronLeft, ChevronRight, Dumbbell, Star, Award, Gift, MessageSquare, X, ListOrdered } from 'lucide-react';
+import { CalendarDays, Users, Clock, MapPin, ChevronLeft, ChevronRight, Dumbbell, Star, Award, Gift, MessageSquare, X, ListOrdered, Search, Sunrise, Sun, Sunset, CheckCircle2, Filter } from 'lucide-react';
 import { useApp } from '../../store/AppContext';
 import * as L from '../../store/logic';
 import { Avatar, Badge, Empty, Modal, PageHead, Stars, Tabs, ConfirmModal, Progress } from '../../components/ui';
@@ -10,10 +10,14 @@ import type { ClassSession } from '../../types';
 /* ================= Lớp học nhóm ================= */
 export function MemberClasses() {
   const { db, user, act } = useApp();
+  const [viewMode, setViewMode] = useState<'agenda' | 'week'>('agenda');
   const [offset, setOffset] = useState(0);
+  const [selectedDate, setSelectedDate] = useState<string>(todayStr());
   const [branch, setBranch] = useState<string>('all');
   const [cat, setCat] = useState<string>('all');
+  const [onlyAvailable, setOnlyAvailable] = useState<boolean>(false);
   const [sel, setSel] = useState<ClassSession | null>(null);
+
   const start = addDays(todayStr(), offset);
   const days = Array.from({ length: 7 }, (_, i) => addDays(start, i));
   const cats = [...new Set(db.classes.filter((c) => c.active).map((c) => c.category))];
@@ -24,69 +28,315 @@ export function MemberClasses() {
     .filter((s) => days.includes(s.date))
     .filter((s) => {
       const c = L.classById(db, s.classId);
-      return c && (branch === 'all' || c.branchId === branch) && (cat === 'all' || c.category === cat);
+      if (!c) return false;
+      if (branch !== 'all' && c.branchId !== branch) return false;
+      if (cat !== 'all' && c.category !== cat) return false;
+      if (onlyAvailable) {
+        const cnt = L.bookedCount(db, s.id);
+        if (cnt >= c.capacity) return false;
+      }
+      return true;
     })
     .sort((a, b) => a.startAt.localeCompare(b.startAt));
 
+  const agendaSessions = sessions.filter((s) => s.date === selectedDate);
   const myBooking = (sid: string) => db.classBookings.find((b) => b.sessionId === sid && b.memberId === user!.id && ['booked', 'waitlist', 'attended'].includes(b.status));
 
   return (
     <>
       <PageHead
-        title="Lớp học nhóm"
-        desc={plan ? <>Gói <b>{plan.name}</b> · {plan.classBookingsPerWeek ? `${plan.classBookingsPerWeek} lượt/tuần` : 'Không giới hạn lượt'} · Ưu tiên waitlist cấp {plan.priority} · {L.scopeLabel(db, plan.branchScope)}</> : 'Bạn cần gói hội viên còn hiệu lực để đặt lớp.'}
+        title="Thời Khóa Biểu & Lớp Học Nhóm"
+        desc={
+          plan ? (
+            <>
+              Gói <b>{plan.name}</b> · {plan.classBookingsPerWeek ? `${plan.classBookingsPerWeek} lượt/tuần` : 'Không giới hạn lượt'} · Ưu tiên waitlist cấp {plan.priority} · {L.scopeLabel(db, plan.branchScope)}
+              <span className="small muted"> · Hủy lịch trước tối thiểu 2 giờ để được hoàn lượt.</span>
+            </>
+          ) : (
+            'Bạn cần gói hội viên còn hiệu lực để đặt lịch lớp học nhóm.'
+          )
+        }
         actions={
-          <>
-            <button className="icon-btn" onClick={() => setOffset(Math.max(0, offset - 7))} disabled={offset === 0}><ChevronLeft size={18} /></button>
-            <span className="bold">{fmtDate(days[0])} – {fmtDate(days[6])}</span>
-            <button className="icon-btn" onClick={() => setOffset(Math.min(7, offset + 7))} disabled={offset >= 7}><ChevronRight size={18} /></button>
-          </>
+          <div className="row wrap" style={{ gap: 8 }}>
+            <div className="tabs" style={{ padding: 2 }}>
+              <button className={`tab ${viewMode === 'agenda' ? 'on' : ''}`} onClick={() => setViewMode('agenda')}>
+                Dạng danh sách ngày
+              </button>
+              <button className={`tab ${viewMode === 'week' ? 'on' : ''}`} onClick={() => setViewMode('week')}>
+                Lưới cả tuần
+              </button>
+            </div>
+            <div className="row" style={{ gap: 4 }}>
+              <button className="icon-btn" onClick={() => setOffset(Math.max(0, offset - 7))} disabled={offset === 0} title="Tuần trước">
+                <ChevronLeft size={18} />
+              </button>
+              <span className="bold small" style={{ minWidth: 140, textAlign: 'center' }}>
+                {fmtDate(days[0])} – {fmtDate(days[6])}
+              </span>
+              <button className="icon-btn" onClick={() => setOffset(Math.min(14, offset + 7))} disabled={offset >= 14} title="Tuần kế tiếp">
+                <ChevronRight size={18} />
+              </button>
+            </div>
+          </div>
         }
       />
-      <div className="row wrap mb16" style={{ gap: 16 }}>
-        <div className="chips">
-          <button className={`chip ${branch === 'all' ? 'on' : ''}`} onClick={() => setBranch('all')}>Tất cả chi nhánh</button>
-          {db.branches.map((b) => <button key={b.id} className={`chip ${branch === b.id ? 'on' : ''}`} onClick={() => setBranch(b.id)}>{b.name.replace('DFGym ', '')}</button>)}
+
+      {/* Thanh chọn ngày trực quan (Day Picker Pills) */}
+      <div className="card mb16" style={{ padding: '12px 16px' }}>
+        <div className="row between wrap" style={{ gap: 12, marginBottom: 12 }}>
+          <div className="small bold muted">Chọn ngày tập luyện:</div>
+          <div className="row" style={{ gap: 8 }}>
+            <button className="btn sm" onClick={() => { setOffset(0); setSelectedDate(todayStr()); }}>
+              Hôm nay
+            </button>
+            <button className="btn sm" onClick={() => { setOffset(0); setSelectedDate(addDays(todayStr(), 1)); }}>
+              Ngày mai
+            </button>
+          </div>
         </div>
-        <div className="chips">
-          <button className={`chip ${cat === 'all' ? 'on' : ''}`} onClick={() => setCat('all')}>Mọi bộ môn</button>
-          {cats.map((c) => <button key={c} className={`chip ${cat === c ? 'on' : ''}`} onClick={() => setCat(c)}>{c}</button>)}
-        </div>
-      </div>
-      <div style={{ overflowX: 'auto' }}>
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7, minmax(150px, 1fr))', gap: 10, minWidth: 1050 }}>
+
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7, 1fr)', gap: 8, overflowX: 'auto' }}>
           {days.map((d) => {
-            const list = sessions.filter((s) => s.date === d);
+            const isSelected = d === selectedDate;
+            const isToday = d === todayStr();
+            const count = sessions.filter((s) => s.date === d).length;
+            const dateObj = parseDate(d);
+
             return (
-              <div className="day-col" key={d}>
-                <div className={`day-head ${d === todayStr() ? 'today' : ''}`}>
-                  <div className="small muted">{WEEKDAYS[parseDate(d).getDay()]}</div>
-                  <div className="bold" style={{ fontSize: 18 }}>{parseDate(d).getDate()}</div>
+              <button
+                key={d}
+                type="button"
+                onClick={() => setSelectedDate(d)}
+                className={`card hover ${isSelected ? 'active-day' : ''}`}
+                style={{
+                  padding: '10px 8px',
+                  textAlign: 'center',
+                  cursor: 'pointer',
+                  border: isSelected ? '2px solid var(--primary)' : isToday ? '1px solid rgba(99, 102, 241, 0.4)' : '1px solid var(--border)',
+                  background: isSelected ? 'rgba(99, 102, 241, 0.12)' : isToday ? 'var(--surface-2)' : 'var(--surface)',
+                  borderRadius: 12,
+                }}
+              >
+                <div className="small muted" style={{ fontWeight: isSelected ? 700 : 500 }}>
+                  {WEEKDAYS[dateObj.getDay()]}
                 </div>
-                {list.length === 0 && <div className="small dim" style={{ textAlign: 'center', padding: 12 }}>—</div>}
-                {list.map((s) => {
-                  const c = L.classById(db, s.classId)!;
-                  const cnt = L.bookedCount(db, s.id);
-                  const wl = L.waitlistOf(db, s.id).length;
-                  const mine = myBooking(s.id);
-                  const past = new Date(s.startAt).getTime() < Date.now();
-                  return (
-                    <div key={s.id} className={`session-card ${mine ? 'mine' : ''} ${s.status === 'cancelled' ? 'cancelled' : ''}`} style={{ ['--c' as string]: c.color, opacity: past && s.status !== 'cancelled' ? 0.5 : undefined }} onClick={() => setSel(s)} id={`session-${s.id}`}>
-                      <div className="small" style={{ color: c.color, fontWeight: 700 }}>{fmtTime(s.startAt)}</div>
-                      <div className="bold" style={{ fontSize: 13.5 }}>{c.name}</div>
-                      <div className="small dim">{L.branchById(db, c.branchId)?.name.replace('DFGym ', '')}</div>
-                      <div className="row between mt8">
-                        <span className="small" style={{ color: cnt >= c.capacity ? '#ff8aa0' : 'var(--text-2)' }}><Users size={12} /> {cnt}/{c.capacity}</span>
-                        {mine ? <Badge color={cbLabel[mine.status][1]} plain>{mine.status === 'waitlist' ? 'Chờ' : '✓'}</Badge> : wl > 0 ? <span className="small" style={{ color: '#ffc857' }}>+{wl} chờ</span> : null}
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
+                <div style={{ fontSize: 18, fontWeight: 800, margin: '2px 0', color: isSelected ? 'var(--primary)' : 'var(--text)' }}>
+                  {dateObj.getDate()}
+                </div>
+                <div className="small dim" style={{ fontSize: 11 }}>
+                  {count > 0 ? `${count} lớp` : 'Nghỉ'}
+                </div>
+              </button>
             );
           })}
         </div>
       </div>
+
+      {/* Bộ Lọc Chi Nhánh & Bộ Môn */}
+      <div className="card mb24" style={{ padding: '14px 18px' }}>
+        <div className="row wrap between" style={{ gap: 12 }}>
+          <div className="row wrap" style={{ gap: 8 }}>
+            <div className="chips">
+              <button className={`chip ${branch === 'all' ? 'on' : ''}`} onClick={() => setBranch('all')}>Tất cả chi nhánh</button>
+              {db.branches.map((b) => (
+                <button key={b.id} className={`chip ${branch === b.id ? 'on' : ''}`} onClick={() => setBranch(b.id)}>
+                  {b.name.replace('DFGym ', '')}
+                </button>
+              ))}
+            </div>
+
+            <div className="chips">
+              <button className={`chip ${cat === 'all' ? 'on' : ''}`} onClick={() => setCat('all')}>Mọi bộ môn</button>
+              {cats.map((c) => (
+                <button key={c} className={`chip ${cat === c ? 'on' : ''}`} onClick={() => setCat(c)}>
+                  {c}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          <label className="row small bold" style={{ cursor: 'pointer', userSelect: 'none' }}>
+            <input
+              type="checkbox"
+              checked={onlyAvailable}
+              onChange={(e) => setOnlyAvailable(e.target.checked)}
+              style={{ accentColor: 'var(--primary)' }}
+            />
+            <span>Chỉ hiện lớp còn chỗ</span>
+          </label>
+        </div>
+      </div>
+
+      {/* CHẾ ĐỘ XEM 1: DANH SÁCH THEO NGÀY (AGENDA VIEW - THÂN THIỆN NHẤT) */}
+      {viewMode === 'agenda' && (
+        <div className="col" style={{ gap: 16 }}>
+          <div className="row between mb8">
+            <h3 style={{ fontSize: 16 }}>
+              Lớp học ngày {fmtWeekday(selectedDate)}, {fmtDate(selectedDate)}
+            </h3>
+            <span className="small muted">{agendaSessions.length} buổi học</span>
+          </div>
+
+          {agendaSessions.length === 0 ? (
+            <div className="card" style={{ padding: 40, textAlign: 'center' }}>
+              <Empty text="Không có lớp học nào trong ngày này phù hợp với bộ lọc." icon={<CalendarDays size={38} />} />
+              <button className="btn sm mt16" onClick={() => { setBranch('all'); setCat('all'); setOnlyAvailable(false); }}>
+                Xóa bộ lọc
+              </button>
+            </div>
+          ) : (
+            <div className="grid g2" style={{ gap: 14 }}>
+              {agendaSessions.map((s) => {
+                const c = L.classById(db, s.classId)!;
+                const tr = L.userById(db, s.trainerId);
+                const cnt = L.bookedCount(db, s.id);
+                const wl = L.waitlistOf(db, s.id);
+                const mine = myBooking(s.id);
+                const full = cnt >= c.capacity;
+                const past = new Date(s.startAt).getTime() < Date.now();
+                const fillPercent = Math.min(100, Math.round((cnt / c.capacity) * 100));
+
+                return (
+                  <div
+                    key={s.id}
+                    className="card hover"
+                    style={{
+                      borderLeft: `5px solid ${c.color}`,
+                      padding: 18,
+                      display: 'flex',
+                      flexDirection: 'column',
+                      justifyContent: 'space-between',
+                      gap: 14,
+                      opacity: past && s.status !== 'cancelled' ? 0.6 : 1,
+                    }}
+                    onClick={() => setSel(s)}
+                  >
+                    <div>
+                      {/* Giờ học & Trạng thái */}
+                      <div className="row between wrap mb8" style={{ gap: 8 }}>
+                        <div className="row" style={{ gap: 8 }}>
+                          <span style={{ fontSize: 16, fontWeight: 800, color: c.color }}>
+                            {fmtTime(s.startAt)} – {fmtTime(s.endAt)}
+                          </span>
+                          <span className="small dim">({c.durationMin} phút)</span>
+                        </div>
+                        <div className="row" style={{ gap: 6 }}>
+                          <Badge color="purple" plain>{c.category}</Badge>
+                          {mine ? (
+                            <Badge color={cbLabel[mine.status][1]}>{mine.status === 'waitlist' ? 'Đang chờ' : '✓ Đã đặt'}</Badge>
+                          ) : s.status === 'cancelled' ? (
+                            <Badge color="red">Đã hủy</Badge>
+                          ) : full ? (
+                            <Badge color="amber">Kín chỗ ({wl.length} chờ)</Badge>
+                          ) : (
+                            <Badge color="green">Còn chỗ</Badge>
+                          )}
+                        </div>
+                      </div>
+
+                      {/* Tên lớp học */}
+                      <h3 style={{ fontSize: 16, marginBottom: 6 }}>{c.name}</h3>
+
+                      {/* Thông tin HLV & Phòng */}
+                      <div className="col small muted" style={{ gap: 4 }}>
+                        <div className="row" style={{ gap: 8 }}>
+                          <Avatar user={tr} size="sm" />
+                          <span style={{ fontWeight: 600, color: 'var(--text)' }}>HLV {tr?.fullName}</span>
+                        </div>
+                        <div className="row" style={{ gap: 6 }}>
+                          <MapPin size={13} className="dim" />
+                          <span>{s.room} · {L.branchById(db, c.branchId)?.name}</span>
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Tiến độ số chỗ & Nút đặt */}
+                    <div style={{ paddingTop: 10, borderTop: '1px solid var(--border)' }}>
+                      <div className="row between small mb8">
+                        <span className="dim">Tình trạng chỗ:</span>
+                        <span style={{ fontWeight: 700, color: full ? 'var(--red)' : 'var(--text)' }}>
+                          {cnt}/{c.capacity} người ({fillPercent}%)
+                        </span>
+                      </div>
+                      <div style={{ height: 6, background: 'var(--surface-2)', borderRadius: 99, overflow: 'hidden', marginBottom: 12 }}>
+                        <div
+                          style={{
+                            height: '100%',
+                            width: `${fillPercent}%`,
+                            background: full ? 'var(--red)' : fillPercent > 70 ? 'var(--amber)' : c.color,
+                            borderRadius: 99,
+                            transition: 'width 0.3s ease',
+                          }}
+                        />
+                      </div>
+
+                      <div className="row between">
+                        <span className="small dim">{c.description.slice(0, 45)}...</span>
+                        <button
+                          className={`btn sm ${mine ? 'ghost' : past ? 'ghost' : 'primary'}`}
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setSel(s);
+                          }}
+                        >
+                          {mine ? 'Xem / Hủy' : past ? 'Đã qua' : full ? 'Vào hàng chờ' : 'Chi tiết & Đặt chỗ'}
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* CHẾ ĐỘ XEM 2: LƯỚI TUẦN TRUYỀN THỐNG (WEEK VIEW) */}
+      {viewMode === 'week' && (
+        <div style={{ overflowX: 'auto' }}>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7, minmax(150px, 1fr))', gap: 10, minWidth: 1050 }}>
+            {days.map((d) => {
+              const list = sessions.filter((s) => s.date === d);
+              return (
+                <div className="day-col" key={d}>
+                  <div className={`day-head ${d === todayStr() ? 'today' : ''}`}>
+                    <div className="small muted">{WEEKDAYS[parseDate(d).getDay()]}</div>
+                    <div className="bold" style={{ fontSize: 18 }}>{parseDate(d).getDate()}</div>
+                  </div>
+                  {list.length === 0 && <div className="small dim" style={{ textAlign: 'center', padding: 12 }}>—</div>}
+                  {list.map((s) => {
+                    const c = L.classById(db, s.classId)!;
+                    const cnt = L.bookedCount(db, s.id);
+                    const wl = L.waitlistOf(db, s.id).length;
+                    const mine = myBooking(s.id);
+                    const past = new Date(s.startAt).getTime() < Date.now();
+                    return (
+                      <div
+                        key={s.id}
+                        className={`session-card ${mine ? 'mine' : ''} ${s.status === 'cancelled' ? 'cancelled' : ''}`}
+                        style={{ ['--c' as string]: c.color, opacity: past && s.status !== 'cancelled' ? 0.5 : undefined }}
+                        onClick={() => setSel(s)}
+                        id={`session-${s.id}`}
+                      >
+                        <div className="small" style={{ color: c.color, fontWeight: 700 }}>{fmtTime(s.startAt)}</div>
+                        <div className="bold" style={{ fontSize: 13.5 }}>{c.name}</div>
+                        <div className="small dim">{L.branchById(db, c.branchId)?.name.replace('DFGym ', '')}</div>
+                        <div className="row between mt8">
+                          <span className="small" style={{ color: cnt >= c.capacity ? '#ff8aa0' : 'var(--text-2)' }}>
+                            <Users size={12} /> {cnt}/{c.capacity}
+                          </span>
+                          {mine ? <Badge color={cbLabel[mine.status][1]} plain>{mine.status === 'waitlist' ? 'Chờ' : '✓'}</Badge> : wl > 0 ? <span className="small" style={{ color: '#ffc857' }}>+{wl} chờ</span> : null}
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
+
       {sel && <SessionModal session={db.sessions.find((x) => x.id === sel.id)!} onClose={() => setSel(null)} onBook={() => act((d) => L.bookClass(d, user!.id, sel.id))} />}
     </>
   );
@@ -146,88 +396,423 @@ function SessionModal({ session: s, onClose, onBook }: { session: ClassSession; 
 /* ================= Đặt lịch PT ================= */
 export function MemberPT() {
   const { db, user, act } = useApp();
-  const trainers = db.users.filter((u) => u.role === 'trainer' && !u.locked);
-  const [tid, setTid] = useState(trainers[0]?.id);
+  const allTrainers = db.users.filter((u) => u.role === 'trainer' && !u.locked);
+
+  const [searchTrainer, setSearchTrainer] = useState('');
+  const [selectedSpecialty, setSelectedSpecialty] = useState('all');
+  const [selectedBranch, setSelectedBranch] = useState('all');
+  const [tid, setTid] = useState(allTrainers[0]?.id);
   const [slot, setSlot] = useState<string | null>(null);
   const [note, setNote] = useState('');
+  const [timeOfDay, setTimeOfDay] = useState<'all' | 'morning' | 'afternoon' | 'evening'>('all');
+  const [selectedDate, setSelectedDate] = useState<string>('all');
+
   const bal = L.ptBalance(db, user!.id);
   const tr = L.userById(db, tid);
   const now = Date.now();
-  const slots = db.trainerSlots.filter((s) => s.trainerId === tid && new Date(s.startAt).getTime() > now).sort((a, b) => a.startAt.localeCompare(b.startAt));
-  const byDay = slots.reduce<Record<string, typeof slots>>((acc, s) => {
-    const d = s.startAt.slice(0, 10) && new Date(s.startAt).toDateString();
-    (acc[d] ||= []).push(s);
-    return acc;
-  }, {});
+
+  // Danh sách các chuyên môn duy nhất từ các HLV
+  const specialties = useMemo(() => {
+    const set = new Set<string>();
+    allTrainers.forEach((t) => t.trainer?.specialties.forEach((s) => set.add(s)));
+    return Array.from(set);
+  }, [allTrainers]);
+
+  // Bộ lọc HLV
+  const filteredTrainers = useMemo(() => {
+    return allTrainers.filter((t) => {
+      if (searchTrainer.trim() && !t.fullName.toLowerCase().includes(searchTrainer.toLowerCase().trim())) {
+        return false;
+      }
+      if (selectedSpecialty !== 'all' && !t.trainer?.specialties.includes(selectedSpecialty)) {
+        return false;
+      }
+      if (selectedBranch !== 'all' && !t.trainer?.branchIds.includes(selectedBranch)) {
+        return false;
+      }
+      return true;
+    });
+  }, [allTrainers, searchTrainer, selectedSpecialty, selectedBranch]);
+
+  // Các khung giờ của HLV được chọn
+  const rawSlots = useMemo(() => {
+    return db.trainerSlots
+      .filter((s) => s.trainerId === tid && new Date(s.startAt).getTime() > now)
+      .sort((a, b) => a.startAt.localeCompare(b.startAt));
+  }, [db.trainerSlots, tid, now]);
+
+  // Lấy các ngày có ca rảnh
+  const availableDates = useMemo(() => {
+    const dates = Array.from(new Set(rawSlots.map((s) => s.startAt.slice(0, 10))));
+    return dates;
+  }, [rawSlots]);
+
+  // Lọc ca theo ngày và buổi
+  const slots = useMemo(() => {
+    return rawSlots.filter((s) => {
+      const d = s.startAt.slice(0, 10);
+      if (selectedDate !== 'all' && d !== selectedDate) return false;
+
+      const hour = new Date(s.startAt).getHours();
+      if (timeOfDay === 'morning' && hour >= 12) return false;
+      if (timeOfDay === 'afternoon' && (hour < 12 || hour >= 17)) return false;
+      if (timeOfDay === 'evening' && hour < 17) return false;
+
+      return true;
+    });
+  }, [rawSlots, selectedDate, timeOfDay]);
+
+  // Gom nhóm theo ngày
+  const byDay = useMemo(() => {
+    return slots.reduce<Record<string, typeof slots>>((acc, s) => {
+      const d = s.startAt.slice(0, 10);
+      (acc[d] ||= []).push(s);
+      return acc;
+    }, {});
+  }, [slots]);
+
   const rating = (id: string) => {
     const rs = db.reviews.filter((r) => r.trainerId === id);
     return { avg: rs.length ? rs.reduce((a, r) => a + r.rating, 0) / rs.length : 0, n: rs.length };
   };
+
   const book = () => {
     if (!slot) return;
     const r = act((d) => L.bookPT(d, user!.id, slot, note), 'Đã gửi yêu cầu đặt lịch, chờ HLV xác nhận');
-    if (r) { setSlot(null); setNote(''); }
+    if (r) {
+      setSlot(null);
+      setNote('');
+    }
   };
-  const sel = slots.find((s) => s.id === slot);
+
+  const sel = rawSlots.find((s) => s.id === slot);
+
   return (
     <>
       <PageHead
-        title="Đặt lịch PT 1-kèm-1"
-        desc="Chọn huấn luyện viên và khung giờ rảnh. Mỗi lần đặt trừ 1 buổi (ưu tiên buổi tặng kèm của gói hội viên)."
+        title="Đặt lịch HLV Cá Nhân (PT 1-kèm-1)"
+        desc="Lựa chọn huấn luyện viên chuyên nghiệp phù hợp với mục tiêu tăng cơ, giảm mỡ hoặc phục hồi thể lực."
         actions={
-          <div className="card row" style={{ padding: '10px 16px', gap: 16 }}>
-            <span className="row small"><Gift size={15} color="#ff8fb0" /> Tặng kèm: <b>{bal.free}</b></span>
-            <span className="row small"><Dumbbell size={15} color="#00d1b2" /> Gói PT: <b>{bal.pkg}</b></span>
+          <div className="card row" style={{ padding: '8px 16px', gap: 16 }}>
+            <span className="row small">
+              <Gift size={16} color="#ff8fb0" /> Tặng kèm: <b style={{ color: '#ff8fb0' }}>{bal.free} buổi</b>
+            </span>
+            <span className="row small">
+              <Dumbbell size={16} color="#00d1b2" /> Gói PT: <b style={{ color: '#00d1b2' }}>{bal.pkg} buổi</b>
+            </span>
           </div>
         }
       />
-      <div className="grid" style={{ gridTemplateColumns: 'minmax(260px, 340px) 1fr', gap: 18 }}>
-        <div className="col">
-          {trainers.map((t) => {
-            const r = rating(t.id);
-            return (
-              <div key={t.id} className="list-item" style={{ cursor: 'pointer', borderColor: t.id === tid ? 'var(--primary)' : undefined, background: t.id === tid ? 'rgba(124,92,255,.1)' : undefined }} onClick={() => { setTid(t.id); setSlot(null); }} id={`trainer-${t.id}`}>
-                <Avatar user={t} />
-                <div className="grow" style={{ minWidth: 0 }}>
-                  <div className="bold">{t.fullName}</div>
-                  <div className="small dim">{t.trainer?.specialties.join(' · ')}</div>
-                  <div className="row small" style={{ gap: 6 }}><Stars value={r.avg} size={12} /> <span className="dim">{r.avg ? r.avg.toFixed(1) : '—'} ({r.n})</span></div>
-                </div>
-              </div>
-            );
-          })}
+
+      {/* THANH BỘ LỌC HUẤN LUYỆN VIÊN */}
+      <div className="card mb16" style={{ padding: 14 }}>
+        <div className="row wrap between" style={{ gap: 12 }}>
+          <div className="row wrap grow" style={{ gap: 10 }}>
+            <div style={{ position: 'relative', minWidth: 220 }}>
+              <Search size={15} className="dim" style={{ position: 'absolute', left: 10, top: '50%', transform: 'translateY(-50%)' }} />
+              <input
+                className="input sm"
+                style={{ paddingLeft: 32, width: '100%' }}
+                placeholder="Tìm theo tên HLV..."
+                value={searchTrainer}
+                onChange={(e) => setSearchTrainer(e.target.value)}
+              />
+            </div>
+
+            <select
+              className="input sm"
+              style={{ minWidth: 160 }}
+              value={selectedSpecialty}
+              onChange={(e) => setSelectedSpecialty(e.target.value)}
+            >
+              <option value="all">Tất cả chuyên môn</option>
+              {specialties.map((s) => (
+                <option key={s} value={s}>{s}</option>
+              ))}
+            </select>
+
+            <select
+              className="input sm"
+              style={{ minWidth: 170 }}
+              value={selectedBranch}
+              onChange={(e) => setSelectedBranch(e.target.value)}
+            >
+              <option value="all">Tất cả cơ sở phòng gym</option>
+              {db.branches.map((b) => (
+                <option key={b.id} value={b.id}>{b.name}</option>
+              ))}
+            </select>
+          </div>
+
+          <span className="small muted">
+            Tìm thấy <b>{filteredTrainers.length}</b> huấn luyện viên
+          </span>
         </div>
+      </div>
+
+      <div className="grid" style={{ gridTemplateColumns: 'minmax(280px, 340px) 1fr', gap: 18 }}>
+        {/* DANH SÁCH HLV */}
+        <div className="col" style={{ gap: 10 }}>
+          {filteredTrainers.length === 0 ? (
+            <div className="card" style={{ padding: 24, textAlign: 'center' }}>
+              <Empty text="Không tìm thấy HLV phù hợp bộ lọc." />
+              <button
+                className="btn sm ghost mt8"
+                onClick={() => {
+                  setSearchTrainer('');
+                  setSelectedSpecialty('all');
+                  setSelectedBranch('all');
+                }}
+              >
+                Đặt lại bộ lọc
+              </button>
+            </div>
+          ) : (
+            filteredTrainers.map((t) => {
+              const r = rating(t.id);
+              const isSel = t.id === tid;
+              const openSlotsCount = db.trainerSlots.filter(
+                (s) => s.trainerId === t.id && new Date(s.startAt).getTime() > now && !L.slotTaken(db, s.id)
+              ).length;
+
+              return (
+                <div
+                  key={t.id}
+                  className={`card hover ${isSel ? 'border-primary' : ''}`}
+                  style={{
+                    padding: 12,
+                    cursor: 'pointer',
+                    background: isSel ? 'rgba(124, 92, 255, 0.08)' : undefined,
+                    border: isSel ? '2px solid var(--primary)' : '1px solid var(--border)',
+                    transition: 'all 0.2s ease',
+                  }}
+                  onClick={() => {
+                    setTid(t.id);
+                    setSlot(null);
+                    setSelectedDate('all');
+                  }}
+                  id={`trainer-${t.id}`}
+                >
+                  <div className="row" style={{ gap: 12, alignItems: 'center' }}>
+                    <Avatar user={t} />
+                    <div className="grow" style={{ minWidth: 0 }}>
+                      <div className="row between">
+                        <span className="bold" style={{ fontSize: 15, color: isSel ? 'var(--primary)' : 'var(--text)' }}>
+                          {t.fullName}
+                        </span>
+                        {openSlotsCount > 0 ? (
+                          <Badge color="green" plain>{openSlotsCount} ca trống</Badge>
+                        ) : (
+                          <span className="small dim">Hết ca</span>
+                        )}
+                      </div>
+                      <div className="small dim truncate" style={{ marginTop: 2 }}>
+                        {t.trainer?.specialties.join(' · ')}
+                      </div>
+                      <div className="row between small mt8" style={{ alignItems: 'center' }}>
+                        <div className="row" style={{ gap: 4 }}>
+                          <Stars value={r.avg} size={13} />
+                          <span className="bold">{r.avg ? r.avg.toFixed(1) : '5.0'}</span>
+                          <span className="dim">({r.n})</span>
+                        </div>
+                        <span className="dim">{t.trainer?.experienceYears} năm KN</span>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              );
+            })
+          )}
+        </div>
+
+        {/* CHI TIẾT HLV & CHỌN LỊCH RẢNH */}
         {tr && (
           <div className="col" style={{ gap: 18 }}>
-            <div className="card">
-              <div className="row" style={{ gap: 16, alignItems: 'flex-start' }}>
+            {/* HỒ SƠ HLV */}
+            <div className="card" style={{ padding: 20 }}>
+              <div className="row" style={{ gap: 18, alignItems: 'flex-start' }}>
                 <Avatar user={tr} size="lg" />
                 <div className="grow">
-                  <h2>{tr.fullName}</h2>
-                  <div className="row wrap mt8">{tr.trainer?.specialties.map((s) => <Badge key={s} color="purple" plain>{s}</Badge>)}</div>
-                  <p className="muted mt8">{tr.trainer?.bio}</p>
-                  <div className="row wrap small muted mt8" style={{ gap: 16 }}>
-                    <span className="row"><Award size={14} /> {tr.trainer?.experienceYears} năm kinh nghiệm</span>
-                    <span>{tr.trainer?.certifications.join(', ')}</span>
-                    <span className="row"><MapPin size={14} /> {tr.trainer?.branchIds.map((b) => L.branchById(db, b)?.name.replace('DFGym ', '')).join(', ')}</span>
+                  <div className="row between wrap" style={{ gap: 8 }}>
+                    <div>
+                      <h2 style={{ fontSize: 20, marginBottom: 4 }}>HLV {tr.fullName}</h2>
+                      <div className="row wrap" style={{ gap: 6 }}>
+                        {tr.trainer?.specialties.map((s) => (
+                          <Badge key={s} color="purple">{s}</Badge>
+                        ))}
+                      </div>
+                    </div>
+                    <div className="row small" style={{ gap: 6, background: 'var(--surface-2)', padding: '6px 12px', borderRadius: 8 }}>
+                      <Stars value={rating(tr.id).avg} size={15} />
+                      <span className="bold">{rating(tr.id).avg ? rating(tr.id).avg.toFixed(1) : '5.0'}</span>
+                      <span className="dim">({rating(tr.id).n} đánh giá)</span>
+                    </div>
+                  </div>
+
+                  <p className="muted mt8" style={{ lineHeight: 1.5 }}>
+                    {tr.trainer?.bio || 'Huấn luyện viên tận tâm, kinh nghiệm xây dựng giáo án cá nhân hóa đạt chuẩn quốc tế.'}
+                  </p>
+
+                  <div className="row wrap small muted mt12" style={{ gap: 16 }}>
+                    <span className="row" style={{ gap: 6 }}>
+                      <Award size={15} color="var(--primary)" />
+                      <b>{tr.trainer?.experienceYears} năm</b> kinh nghiệm
+                    </span>
+                    <span className="row" style={{ gap: 6 }}>
+                      <CheckCircle2 size={15} color="#00d1b2" />
+                      {tr.trainer?.certifications.join(', ')}
+                    </span>
+                    <span className="row" style={{ gap: 6 }}>
+                      <MapPin size={15} color="#ff8fb0" />
+                      {tr.trainer?.branchIds.map((b) => L.branchById(db, b)?.name.replace('DFGym ', '')).join(', ')}
+                    </span>
                   </div>
                 </div>
               </div>
             </div>
+
+            {/* BỘ LỌC KHUNG GIỜ RẢNH & DANH SÁCH CA */}
             <div className="card">
-              <div className="card-head"><h2><CalendarDays size={18} /> Khung giờ rảnh</h2><span className="small muted">{slots.length} khung giờ</span></div>
-              {slots.length === 0 ? <Empty text="HLV chưa cập nhật lịch rảnh" /> : (
-                <div className="col" style={{ gap: 16 }}>
+              <div className="card-head between wrap" style={{ gap: 12 }}>
+                <div>
+                  <h2><CalendarDays size={18} /> Chọn khung giờ tập 1-kèm-1</h2>
+                  <span className="small muted">
+                    HLV có {rawSlots.length} ca tập được mở trong tuần này
+                  </span>
+                </div>
+
+                {/* Bộ lọc buổi trong ngày: Sáng / Chiều / Tối */}
+                <div className="chips">
+                  <button
+                    className={`chip ${timeOfDay === 'all' ? 'on' : ''}`}
+                    onClick={() => setTimeOfDay('all')}
+                  >
+                    Tất cả ca
+                  </button>
+                  <button
+                    className={`chip ${timeOfDay === 'morning' ? 'on' : ''}`}
+                    onClick={() => setTimeOfDay('morning')}
+                  >
+                    <Sunrise size={13} style={{ marginRight: 4 }} /> Sáng (6h - 12h)
+                  </button>
+                  <button
+                    className={`chip ${timeOfDay === 'afternoon' ? 'on' : ''}`}
+                    onClick={() => setTimeOfDay('afternoon')}
+                  >
+                    <Sun size={13} style={{ marginRight: 4 }} /> Chiều (12h - 17h)
+                  </button>
+                  <button
+                    className={`chip ${timeOfDay === 'evening' ? 'on' : ''}`}
+                    onClick={() => setTimeOfDay('evening')}
+                  >
+                    <Sunset size={13} style={{ marginRight: 4 }} /> Tối (17h - 22h)
+                  </button>
+                </div>
+              </div>
+
+              {/* Lọc nhanh theo ngày có ca rảnh */}
+              {availableDates.length > 1 && (
+                <div className="row wrap pb8 mb16" style={{ gap: 8, borderBottom: '1px solid var(--border)' }}>
+                  <button
+                    className={`btn sm ${selectedDate === 'all' ? 'primary' : 'ghost'}`}
+                    onClick={() => setSelectedDate('all')}
+                  >
+                    Tất cả ngày ({rawSlots.length})
+                  </button>
+                  {availableDates.map((d) => {
+                    const count = rawSlots.filter((s) => s.startAt.startsWith(d)).length;
+                    const isCur = selectedDate === d;
+                    return (
+                      <button
+                        key={d}
+                        className={`btn sm ${isCur ? 'primary' : 'ghost'}`}
+                        onClick={() => setSelectedDate(d)}
+                      >
+                        {fmtWeekday(d)}, {fmtDate(d).slice(0, 5)} ({count})
+                      </button>
+                    );
+                  })}
+                </div>
+              )}
+
+              {slots.length === 0 ? (
+                <div style={{ padding: '30px 20px', textAlign: 'center' }}>
+                  <Empty text="Không có khung giờ rảnh nào phù hợp với bộ lọc buổi hoặc ngày này." />
+                  <button
+                    className="btn sm ghost mt12"
+                    onClick={() => {
+                      setTimeOfDay('all');
+                      setSelectedDate('all');
+                    }}
+                  >
+                    Hiển thị tất cả ca của HLV
+                  </button>
+                </div>
+              ) : (
+                <div className="col" style={{ gap: 18 }}>
                   {Object.entries(byDay).map(([d, list]) => (
                     <div key={d}>
-                      <div className="small bold muted mb16" style={{ marginBottom: 8 }}>{fmtWeekday(list[0].startAt)}, {fmtDate(list[0].startAt)}</div>
-                      <div className="row wrap">
+                      <div className="row between mb8">
+                        <span className="small bold" style={{ color: 'var(--primary)', textTransform: 'uppercase', letterSpacing: 0.5 }}>
+                          📅 {fmtWeekday(d)}, {fmtDate(d)}
+                        </span>
+                        <span className="small dim">{list.length} ca tập</span>
+                      </div>
+
+                      <div className="grid" style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(170px, 1fr))', gap: 10 }}>
                         {list.map((s) => {
                           const taken = L.slotTaken(db, s.id);
+                          const isSel = slot === s.id;
+                          const startMs = new Date(s.startAt).getTime();
+                          const endMs = new Date(s.endAt).getTime();
+                          const durMin = Math.round((endMs - startMs) / 60000);
+                          const branch = L.branchById(db, s.branchId);
+
                           return (
-                            <button key={s.id} className={`slot-btn ${slot === s.id ? 'on' : ''}`} disabled={taken} onClick={() => setSlot(s.id)} style={{ minWidth: 120 }} id={`slot-${s.id}`}>
-                              {fmtTime(s.startAt)} – {fmtTime(s.endAt)}
-                              <div className="small dim" style={{ fontWeight: 400 }}>{L.branchById(db, s.branchId)?.name.replace('DFGym ', '')}</div>
+                            <button
+                              key={s.id}
+                              className={`card hover ${isSel ? 'border-primary' : ''}`}
+                              disabled={taken}
+                              onClick={() => setSlot(s.id)}
+                              style={{
+                                padding: 12,
+                                textAlign: 'left',
+                                cursor: taken ? 'not-allowed' : 'pointer',
+                                background: isSel
+                                  ? 'rgba(0, 209, 178, 0.12)'
+                                  : taken
+                                  ? 'var(--surface-2)'
+                                  : 'var(--surface)',
+                                border: isSel
+                                  ? '2px solid var(--primary)'
+                                  : '1px solid var(--border)',
+                                opacity: taken ? 0.45 : 1,
+                                transition: 'all 0.15s ease',
+                              }}
+                              id={`slot-${s.id}`}
+                            >
+                              <div className="row between mb4">
+                                <span style={{ fontWeight: 800, fontSize: 15, color: isSel ? 'var(--primary)' : 'var(--text)' }}>
+                                  {fmtTime(s.startAt)} – {fmtTime(s.endAt)}
+                                </span>
+                                <Badge color={durMin === 90 ? 'purple' : durMin === 60 ? 'blue' : 'amber'} plain>
+                                  {durMin}p
+                                </Badge>
+                              </div>
+
+                              <div className="small dim truncate">
+                                📍 {branch?.name.replace('DFGym ', '') || 'Chi nhánh'}
+                              </div>
+
+                              <div className="row between mt8 small">
+                                {taken ? (
+                                  <span style={{ color: 'var(--red)', fontWeight: 600 }}>Đã kín</span>
+                                ) : isSel ? (
+                                  <span style={{ color: 'var(--primary)', fontWeight: 700 }}>✓ Đang chọn</span>
+                                ) : (
+                                  <span style={{ color: '#00d1b2', fontWeight: 600 }}>Còn trống</span>
+                                )}
+                              </div>
                             </button>
                           );
                         })}
@@ -236,15 +821,55 @@ export function MemberPT() {
                   ))}
                 </div>
               )}
+
+              {/* KHUNG XÁC NHẬN ĐẶT LỊCH */}
               {sel && (
-                <div className="card mt16" style={{ background: 'rgba(0,209,178,.07)', borderColor: 'rgba(0,209,178,.3)' }}>
-                  <div className="bold">Xác nhận: {fmtWeekday(sel.startAt)} {fmtDateTime(sel.startAt)} tại {L.branchById(db, sel.branchId)?.name}</div>
-                  <div className="small muted mt8">Sẽ trừ 1 {bal.free > 0 ? 'buổi tặng kèm của gói hội viên' : 'buổi từ gói PT (gói hết hạn sớm nhất)'}. Hủy trước {db.settings.cancelDeadlineHours}h hoặc HLV từ chối sẽ được hoàn buổi.</div>
-                  <div className="row mt16">
-                    <input className="input grow" placeholder="Ghi chú cho HLV (mục tiêu, nhóm cơ...)" value={note} onChange={(e) => setNote(e.target.value)} id="pt-note" />
-                    <button className="btn primary" onClick={book} disabled={bal.total === 0} id="pt-book">Gửi yêu cầu</button>
+                <div
+                  className="card mt16"
+                  style={{
+                    background: 'rgba(0, 209, 178, 0.08)',
+                    borderColor: 'rgba(0, 209, 178, 0.35)',
+                    padding: 18,
+                  }}
+                >
+                  <div className="row between wrap mb8" style={{ gap: 8 }}>
+                    <div className="bold" style={{ fontSize: 16 }}>
+                      Xác nhận: {fmtWeekday(sel.startAt)}, {fmtDateTime(sel.startAt)} ({Math.round((new Date(sel.endAt).getTime() - new Date(sel.startAt).getTime()) / 60000)} phút)
+                    </div>
+                    <Badge color="green">
+                      {L.branchById(db, sel.branchId)?.name}
+                    </Badge>
                   </div>
-                  {bal.total === 0 && <div className="small mt8" style={{ color: '#ff8aa0' }}>Bạn đã hết buổi PT – hãy mua gói PT 1-kèm-1.</div>}
+
+                  <div className="small muted mb12" style={{ lineHeight: 1.5 }}>
+                    📌 Huấn luyện viên: <b>{tr.fullName}</b>. Sẽ trừ <b>1 buổi</b> (ưu tiên {bal.free > 0 ? 'buổi tặng kèm của gói hội viên' : 'từ gói PT cá nhân'}).
+                    Hủy trước {db.settings.cancelDeadlineHours} giờ hoặc HLV từ chối lịch sẽ được hoàn lại 100% buổi tập.
+                  </div>
+
+                  <div className="row wrap" style={{ gap: 10 }}>
+                    <input
+                      className="input grow"
+                      placeholder="Ghi chú cho HLV (vd: mục tiêu buổi tập, thể lực, chấn thương nếu có...)"
+                      value={note}
+                      onChange={(e) => setNote(e.target.value)}
+                      id="pt-note"
+                    />
+                    <button
+                      className="btn primary"
+                      onClick={book}
+                      disabled={bal.total === 0}
+                      id="pt-book"
+                      style={{ minWidth: 140 }}
+                    >
+                      Xác nhận đặt lịch
+                    </button>
+                  </div>
+
+                  {bal.total === 0 && (
+                    <div className="small mt8" style={{ color: 'var(--red)', fontWeight: 600 }}>
+                      ⚠️ Bạn đã hết số buổi PT (cả quà tặng và gói mua). Vui lòng đăng ký gói PT để đặt lịch.
+                    </div>
+                  )}
                 </div>
               )}
             </div>

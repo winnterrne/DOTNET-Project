@@ -14,6 +14,7 @@ import { MemberHome } from './pages/member/MemberHome';
 import { MemberMemberships } from './pages/member/MemberMemberships';
 import { MemberClasses, MemberPT, MemberBookings } from './pages/member/MemberBooking';
 import { MemberProfile, MemberProgress, MemberCard, MemberPayments, MemberEquipment } from './pages/member/MemberMisc';
+import { GymRules } from './pages/member/GymRules';
 
 // Trainer
 import {
@@ -73,6 +74,7 @@ export default function App() {
             <Route path="memberships" element={<MemberMemberships />} />
             <Route path="payments" element={<MemberPayments />} />
             <Route path="equipment" element={<MemberEquipment />} />
+            <Route path="rules" element={<GymRules />} />
             <Route path="profile" element={<MemberProfile />} />
           </Route>
 

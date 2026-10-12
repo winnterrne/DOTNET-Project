@@ -47,7 +47,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const [userId, setUserId] = useState<string | null>(() => localStorage.getItem(SESSION_KEY));
   const [toasts, setToasts] = useState<Toast[]>([]);
   const [theme, setTheme] = useState<'light' | 'dark'>(() => {
-    return (localStorage.getItem('dfgym_theme') as 'light' | 'dark') || 'light';
+    return (localStorage.getItem('dfgym_theme') as 'light' | 'dark') || 'dark';
   });
   const dbRef = useRef(db);
   dbRef.current = db;

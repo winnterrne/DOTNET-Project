@@ -4,7 +4,7 @@ import { NavLink, Outlet, useNavigate, Navigate, useLocation } from 'react-route
 import {
   LayoutDashboard, User as UserIcon, Activity, CreditCard, CalendarDays, Dumbbell, ClipboardList, QrCode, Receipt, Wrench, Bell,
   LogOut, Menu, CalendarClock, Inbox, Star, ScanLine, Snowflake, History, Users, Building2, Package, BarChart3, Settings, RotateCcw,
-  CheckCircle2, AlertTriangle, Info, XCircle, KeyRound, Zap, Sun, Moon,
+  CheckCircle2, AlertTriangle, Info, XCircle, KeyRound, Zap, Sun, Moon, BookOpen,
 } from 'lucide-react';
 import { useApp } from '../store/AppContext';
 import { Avatar, Badge } from './ui';
@@ -32,6 +32,7 @@ function useNav(role: Role): { section: string; items: NavItem[] }[] {
           { to: '/member/pt', label: 'Đặt lịch PT', icon: <Dumbbell size={s} /> },
           { to: '/member/bookings', label: 'Lịch của tôi', icon: <ClipboardList size={s} /> },
           { to: '/member/progress', label: 'Tiến độ & chỉ số', icon: <Activity size={s} /> },
+          { to: '/member/rules', label: 'Nội quy phòng gym', icon: <BookOpen size={s} /> },
         ] },
         { section: 'Tài khoản', items: [
           { to: '/member/memberships', label: 'Gói tập', icon: <CreditCard size={s} /> },

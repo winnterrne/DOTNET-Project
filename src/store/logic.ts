@@ -732,14 +732,304 @@ export function completePT(db: DB, bookingId: string, attended: boolean) {
 }
 
 export function addSlot(db: DB, trainerId: string, branchId: string, date: string, start: string, durationMin: number) {
+  const trainer = userById(db, trainerId) ?? fail('Không tìm thấy huấn luyện viên');
+  const branch = branchById(db, branchId) ?? fail('Không tìm thấy chi nhánh');
+  
+  // Quy tắc 1: Chi nhánh được phân công
+  if (trainer.trainer?.branchIds && trainer.trainer.branchIds.length > 0 && !trainer.trainer.branchIds.includes(branchId)) {
+    fail(`Bạn không được phân công dạy tại chi nhánh ${branch.name}`);
+  }
+
+  // Quy tắc 2: Thời lượng chuẩn
+  if (![45, 60, 90].includes(durationMin)) {
+    fail('Thời lượng ca dạy phải là 45 phút, 60 phút hoặc 90 phút theo quy định');
+  }
+
   const startAt = atTime(date, start);
   const endAt = new Date(new Date(startAt).getTime() + durationMin * 60000).toISOString();
-  if (new Date(startAt).getTime() <= Date.now()) fail('Không thể thêm khung giờ trong quá khứ');
+  const startTimeMs = new Date(startAt).getTime();
+  const now = Date.now();
+
+  // Quy tắc 3: Không mở lịch trong quá khứ và phải trước tối thiểu 2 giờ
+  if (startTimeMs <= now) fail('Không thể thêm khung giờ trong quá khứ');
+  if (startTimeMs - now < 2 * 3600000) {
+    fail('Theo quy định phòng gym, khung giờ rảnh phải được mở trước giờ bắt đầu ít nhất 2 tiếng để hội viên kịp đăng ký');
+  }
+
+  // Quy tắc 4: Phải nằm trong khung giờ mở/đóng cửa của chi nhánh
+  if (branch.openTime && branch.closeTime) {
+    const endMinutes = +start.slice(0, 2) * 60 + +start.slice(3, 5) + durationMin;
+    const endHH = String(Math.floor(endMinutes / 60)).padStart(2, '0');
+    const endMM = String(endMinutes % 60).padStart(2, '0');
+    const endTimeStr = `${endHH}:${endMM}`;
+    if (start < branch.openTime || endTimeStr > branch.closeTime) {
+      fail(`Khung giờ phải nằm trong thời gian hoạt động của chi nhánh (${branch.openTime} – ${branch.closeTime})`);
+    }
+  }
+
+  // Quy tắc 5: Giới hạn tối đa 8 ca dạy trong 1 ngày
+  const slotsInDay = db.trainerSlots.filter((s) => s.trainerId === trainerId && s.startAt.startsWith(date)).length;
+  if (slotsInDay >= 8) {
+    fail('Bạn đã mở tối đa 8 ca trong ngày này. Quy định phòng gym giới hạn tối đa 8 ca/ngày để đảm bảo thể lực và chất lượng huấn luyện.');
+  }
+
+  // Quy tắc 6: Chống trùng lịch rảnh & lớp nhóm
   const overlap = db.trainerSlots.some((s) => s.trainerId === trainerId && s.startAt < endAt && startAt < s.endAt);
-  if (overlap) fail('Trùng với khung giờ rảnh đã có');
+  if (overlap) fail('Trùng với khung giờ rảnh đã có của bạn');
   const clash = db.sessions.some((s) => s.trainerId === trainerId && s.status === 'scheduled' && s.startAt < endAt && startAt < s.endAt);
-  if (clash) fail('Trùng với lịch dạy lớp nhóm');
+  if (clash) fail('Trùng với lịch dạy lớp nhóm của bạn');
+
   db.trainerSlots.push({ id: uid('slot'), trainerId, branchId, startAt, endAt });
+}
+
+/* ------------------------------------------------------------------ */
+/*  AI Nutrition Advisory Calculation                                  */
+/* ------------------------------------------------------------------ */
+export interface NutritionPlanResult {
+  bmr: number;
+  tdee: number;
+  targetCalories: number;
+  deficitOrSurplus: number;
+  macros: { protein: number; carbs: number; fat: number };
+  waterLiters: number;
+  goalLabel: string;
+  meals: {
+    name: string;
+    time: string;
+    calories: number;
+    description: string;
+    items: string[];
+  }[];
+  tips: string[];
+}
+
+export function calculateNutritionPlan(opts: {
+  gender: 'male' | 'female' | 'other';
+  age: number;
+  weight: number;
+  height: number;
+  bodyFat?: number;
+  goal: 'lose_fat' | 'build_muscle' | 'maintain' | 'endurance';
+  activityLevel: 'sedentary' | 'light' | 'moderate' | 'high';
+  dietStyle: 'eat_clean' | 'high_protein' | 'vegetarian' | 'low_carb';
+}): NutritionPlanResult {
+  const { gender, age, weight, height, goal, activityLevel, dietStyle } = opts;
+
+  // BMR (Mifflin-St Jeor formula)
+  let bmr = 10 * weight + 6.25 * height - 5 * age;
+  bmr = gender === 'female' ? bmr - 161 : bmr + 5;
+  bmr = Math.round(bmr);
+
+  // Activity multipliers
+  const actMultipliers = {
+    sedentary: 1.2,
+    light: 1.375,
+    moderate: 1.55,
+    high: 1.725,
+  };
+  const tdee = Math.round(bmr * (actMultipliers[activityLevel] || 1.4));
+
+  // Goal calorie adjustment
+  let targetCalories = tdee;
+  let deficitOrSurplus = 0;
+  let goalLabel = 'Duy trì cân nặng & Tăng cường thể lực';
+
+  if (goal === 'lose_fat') {
+    deficitOrSurplus = -500;
+    targetCalories = Math.max(1200, tdee - 500);
+    goalLabel = 'Giảm mỡ & Siết cơ (Fat Loss & Cut)';
+  } else if (goal === 'build_muscle') {
+    deficitOrSurplus = 350;
+    targetCalories = tdee + 350;
+    goalLabel = 'Tăng cơ nạc (Lean Bulking)';
+  } else if (goal === 'endurance') {
+    deficitOrSurplus = 150;
+    targetCalories = tdee + 150;
+    goalLabel = 'Tăng sức bền & Thể lực tim mạch';
+  }
+
+  // Protein grams
+  const proteinMultiplier = goal === 'build_muscle' ? 2.2 : goal === 'lose_fat' ? 2.0 : 1.8;
+  const protein = Math.round(weight * proteinMultiplier);
+  const proteinCals = protein * 4;
+
+  // Fat (25-30% of target calories)
+  const fatCals = Math.round(targetCalories * (dietStyle === 'low_carb' ? 0.35 : 0.25));
+  const fat = Math.round(fatCals / 9);
+
+  // Remaining cals from carbs
+  const carbCals = Math.max(0, targetCalories - proteinCals - fatCals);
+  const carbs = Math.round(carbCals / 4);
+
+  // Water: 40ml per kg weight + 0.5L for training
+  const waterLiters = +(weight * 0.04 + 0.5).toFixed(1);
+
+  // Diet-specific meal blueprints
+  const mealsByStyle: Record<string, NutritionPlanResult['meals']> = {
+    eat_clean: [
+      {
+        name: 'Bữa sáng khởi động',
+        time: '07:00 - 07:30',
+        calories: Math.round(targetCalories * 0.25),
+        description: 'Cung cấp năng lượng sạch, đường hấp thu chậm và đạm nạc',
+        items: ['Yến mạch nấu sữa hạnh nhân / sữa chua Hy Lạp', '3 lòng trắng trứng + 1 quả trứng ốp la', '1/2 quả chuối + hạt chia'],
+      },
+      {
+        name: 'Bữa phụ trước tập (Pre-workout)',
+        time: '10:00 hoặc trước tập 45p',
+        calories: Math.round(targetCalories * 0.1),
+        description: 'Tăng glycogen cơ bắp, hỗ trợ tỉnh táo và chống mỏi cơ',
+        items: ['1 lát bánh mì đen nguyên cám quết bơ đậu phộng', '1 quả táo xanh / chuối', '1 ly cà phê đen không đường / BCAA'],
+      },
+      {
+        name: 'Bữa trưa phục hồi',
+        time: '12:00 - 12:45',
+        calories: Math.round(targetCalories * 0.35),
+        description: 'Bữa chính cân bằng đầy đủ đạm, tinh bột phức và chất xơ',
+        items: ['150g ức gà áp chảo hoặc cá hồi nướng', '1 chén cơm gạo lứt / khoai lang luộc', 'Rau củ luộc (bông cải xanh, măng tây, cà rốt)'],
+      },
+      {
+        name: 'Bữa phụ chiều (Post-workout)',
+        time: '16:00 - 16:30',
+        calories: Math.round(targetCalories * 0.1),
+        description: 'Nạp protein hấp thu nhanh giúp phục hồi sợi cơ bị tổn thương',
+        items: ['1 muỗng Whey Protein Isolate pha nước mát', '1 nắm hạt hạnh nhân hoặc óc chó (25g)'],
+      },
+      {
+        name: 'Bữa tối nhẹ bụng & Tái tạo',
+        time: '19:00 - 19:30',
+        calories: Math.round(targetCalories * 0.2),
+        description: 'Giảm tinh bột, tăng chất xơ và đạm nạc giúp giấc ngủ sâu',
+        items: ['150g tôm hấp hoặc thăn bò nướng', 'Đĩa xà lách trộn dầu olive và giấm táo', 'Canh rau củ thanh đạm'],
+      },
+    ],
+    high_protein: [
+      {
+        name: 'Bữa sáng giàu đạm',
+        time: '07:00',
+        calories: Math.round(targetCalories * 0.25),
+        description: 'Kích hoạt đồng hóa protein ngay sau khi thức dậy',
+        items: ['Trứng cuộn 4 trứng (2 nguyên, 2 lòng trắng)', '2 lát bánh mì ngũ cốc nguyên hạt', 'Ly sữa tươi tiệt trùng không đường'],
+      },
+      {
+        name: 'Bữa phụ sáng',
+        time: '10:00',
+        calories: Math.round(targetCalories * 0.1),
+        description: 'Duy trì nồng độ Amino Acid trong máu',
+        items: ['1 hũ sữa chua Hy Lạp nguyên chất (15g protein)', 'Hạt điều rang sấy tự nhiên'],
+      },
+      {
+        name: 'Bữa trưa tăng cơ',
+        time: '12:30',
+        calories: Math.round(targetCalories * 0.35),
+        description: 'Tối ưu hóa tổng hợp cơ bắp với thịt đỏ và carb sạch',
+        items: ['180g bò bít tết hoặc phi lê gà', '1 củ khoai tây nướng hoặc 1 chén cơm lứt', 'Xà lách xốt mè rang'],
+      },
+      {
+        name: 'Bữa phục hồi sau tập',
+        time: '16:30',
+        calories: Math.round(targetCalories * 0.1),
+        description: 'Bổ sung ngay sau buổi tập kháng lực',
+        items: ['1 muỗng Whey Protein + 1 quả chuối sứ chín'],
+      },
+      {
+        name: 'Bữa tối tái tạo',
+        time: '19:30',
+        calories: Math.round(targetCalories * 0.2),
+        description: 'Đạm hấp thu chậm giúp nuôi cơ suốt đêm',
+        items: ['160g cá ngừ / cá chẽm áp chảo', 'Bông cải xanh xào tỏi dầu oliu', 'Súp nấm thanh đạm'],
+      },
+    ],
+    vegetarian: [
+      {
+        name: 'Bữa sáng thực vật',
+        time: '07:00',
+        calories: Math.round(targetCalories * 0.25),
+        description: 'Nguồn đạm từ hạt, đậu và yến mạch hữu cơ',
+        items: ['Sinh tố yến mạch, bột protein thực vật, sữa hạt điều', 'Bánh mì đen kẹp bơ quả và dưa leo'],
+      },
+      {
+        name: 'Bữa phụ trước tập',
+        time: '10:00',
+        calories: Math.round(targetCalories * 0.1),
+        description: 'Tăng cường năng lượng tự nhiên',
+        items: ['1 quả chuối + 2 muỗng bơ đậu phộng nguyên chất', 'Hạt chia ngâm nước dừa'],
+      },
+      {
+        name: 'Bữa trưa chay năng động',
+        time: '12:30',
+        calories: Math.round(targetCalories * 0.35),
+        description: 'Kết hợp các loại đậu và ngũ cốc để đủ axit amin thiết yếu',
+        items: ['Đậu hũ áp chảo sốt cà chua nấm đông cô', '1 chén cơm gạo lứt trộn đậu gà và đậu lăng', 'Canh rong biển đậu hũ non'],
+      },
+      {
+        name: 'Bữa phụ phục hồi',
+        time: '16:30',
+        calories: Math.round(targetCalories * 0.1),
+        description: 'Nạp protein thực vật tinh khiết',
+        items: ['1 ly sữa đậu nành tươi không đường', 'Hạt óc chó và hạnh nhân (30g)'],
+      },
+      {
+        name: 'Bữa tối thuần khiết',
+        time: '19:30',
+        calories: Math.round(targetCalories * 0.2),
+        description: 'Nhẹ bụng, giàu chất chống oxy hóa',
+        items: ['Tempeh / Đậu nành lên men áp chảo', 'Salad rau củ sốt chanh dây', 'Bí đỏ hấp hạt sen'],
+      },
+    ],
+    low_carb: [
+      {
+        name: 'Bữa sáng Keto/Low-Carb',
+        time: '07:00',
+        calories: Math.round(targetCalories * 0.3),
+        description: 'Chất béo lành mạnh và protein cao, carb dưới 5g',
+        items: ['3 quả trứng bác bơ tỏi', '3 lát thịt xông khói áp chảo giòn', '1/2 quả bơ sáp cắt lát'],
+      },
+      {
+        name: 'Bữa trưa năng lượng bền bỉ',
+        time: '12:30',
+        calories: Math.round(targetCalories * 0.35),
+        description: 'Chuyển hóa mỡ thành năng lượng hoạt động',
+        items: ['200g cá hồi áp chảo sốt kem bơ chanh', 'Măng tây và bông cải trắng xào dầu olive', 'Salad rau bina với hạt hướng dương'],
+      },
+      {
+        name: 'Bữa phụ chiều',
+        time: '16:30',
+        calories: Math.round(targetCalories * 0.1),
+        description: 'Chống đói và duy trì trạng thái Ketosis',
+        items: ['Phô mai sợi / Phô mai miếng Cheddar', 'Hạt mắc ca hoặc hạnh nhân (30g)'],
+      },
+      {
+        name: 'Bữa tối giàu đạm sạch',
+        time: '19:30',
+        calories: Math.round(targetCalories * 0.25),
+        description: 'Protein nạc và rau lá xanh đậm',
+        items: ['180g đùi gà nướng thảo mộc', 'Salad bắp cải tím trộn giấm dầu oliu', 'Canh nấm thịt băm'],
+      },
+    ],
+  };
+
+  const meals = mealsByStyle[dietStyle] || mealsByStyle.eat_clean;
+
+  const tips = [
+    `💧 Uống đủ ${waterLiters} lít nước mỗi ngày; uống 250ml nước trước buổi tập 30 phút.`,
+    '⏰ Bữa ăn trước tập nên cách giờ tập 60 - 90 phút để hệ tiêu hóa làm việc ổn định, tránh trào ngược.',
+    '🥩 Đảm bảo nạp đủ lượng Protein mục tiêu hàng ngày để cơ bắp phục hồi và phát triển tối đa.',
+    '😴 Ngủ đủ 7 - 8 tiếng mỗi đêm; 80% quá trình đốt mỡ và xây dựng mô cơ diễn ra khi cơ thể trong giấc ngủ sâu.',
+    '🥗 Luôn ăn rau củ trước bữa ăn chính để bổ sung chất xơ và kiểm soát nồng độ đường huyết sau ăn.',
+  ];
+
+  return {
+    bmr,
+    tdee,
+    targetCalories,
+    deficitOrSurplus,
+    macros: { protein, carbs, fat },
+    waterLiters,
+    goalLabel,
+    meals,
+    tips,
+  };
 }
 
 export function removeSlot(db: DB, slotId: string) {

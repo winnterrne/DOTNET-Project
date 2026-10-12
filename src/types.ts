@@ -262,6 +262,9 @@ export interface BodyMetric {
   bmi: number;
   bodyFat?: number;
   muscleMass?: number;
+  waist?: number;
+  chest?: number;
+  hips?: number;
   note?: string;
 }
 

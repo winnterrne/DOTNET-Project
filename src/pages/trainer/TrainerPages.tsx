@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { Link } from 'react-router-dom';
-import { CalendarDays, Inbox, Star, Users, Check, X, Plus, Trash2, Clock, ClipboardCheck, Save, Award, ArrowRight, UserCheck, MapPin } from 'lucide-react';
+import { CalendarDays, Inbox, Star, Users, Check, X, Plus, Trash2, Clock, ClipboardCheck, Save, Award, ArrowRight, UserCheck, MapPin, Info } from 'lucide-react';
 import { useApp } from '../../store/AppContext';
 import * as L from '../../store/logic';
 import { Avatar, Badge, Empty, Modal, PageHead, StatCard, Stars, Tabs, ReasonModal } from '../../components/ui';
@@ -148,32 +148,117 @@ export function TrainerAvailability() {
   const [dur, setDur] = useState(60);
   const [branch, setBranch] = useState(branches[0]?.id ?? db.branches[0].id);
   const [repeat, setRepeat] = useState(1);
+  const [showRuleModal, setShowRuleModal] = useState(false);
   const days = Array.from({ length: 14 }, (_, i) => addDays(todayStr(), i));
   const now = Date.now();
   const slots = db.trainerSlots.filter((s) => s.trainerId === user!.id && new Date(s.endAt).getTime() > now);
   const sessions = db.sessions.filter((s) => s.trainerId === user!.id && s.status === 'scheduled' && new Date(s.endAt).getTime() > now);
+
+  const selectedBranch = db.branches.find((b) => b.id === branch);
+  const slotsInSelectedDate = slots.filter((s) => s.startAt.startsWith(date)).length;
+
   const add = () => {
     let ok = 0;
     act((d) => {
       for (let i = 0; i < repeat; i++) {
         try { L.addSlot(d, user!.id, branch, addDays(date, i * 7), time, dur); ok++; } catch (e) { if (repeat === 1) throw e; }
       }
-      if (!ok) throw new Error('Không thêm được khung giờ nào (trùng lịch)');
-    }, () => `Đã thêm ${ok} khung giờ rảnh`);
+      if (!ok) throw new Error('Không thêm được khung giờ nào (trùng lịch hoặc vi phạm quy tắc ca)');
+    }, () => `Đã thêm ${ok} khung giờ rảnh thành công`);
   };
   return (
     <>
-      <PageHead title="Lịch rảnh" desc="Hội viên chọn các khung giờ này khi đặt lịch PT 1-kèm-1." />
-      <div className="card mb16">
-        <div className="row wrap" style={{ alignItems: 'flex-end', gap: 12 }}>
-          <div className="field"><label>Ngày</label><input type="date" className="input" min={todayStr()} value={date} onChange={(e) => setDate(e.target.value)} id="slot-date" /></div>
-          <div className="field"><label>Giờ bắt đầu</label><input type="time" className="input" value={time} onChange={(e) => setTime(e.target.value)} id="slot-time" /></div>
-          <div className="field"><label>Thời lượng</label><select className="input" value={dur} onChange={(e) => setDur(+e.target.value)}><option value={45}>45 phút</option><option value={60}>60 phút</option><option value={90}>90 phút</option></select></div>
-          <div className="field"><label>Chi nhánh</label><select className="input" value={branch} onChange={(e) => setBranch(e.target.value)}>{branches.map((b) => <option key={b.id} value={b.id}>{b.name}</option>)}</select></div>
-          <div className="field"><label>Lặp lại hàng tuần</label><select className="input" value={repeat} onChange={(e) => setRepeat(+e.target.value)}><option value={1}>Không</option><option value={2}>2 tuần</option><option value={4}>4 tuần</option></select></div>
-          <button className="btn primary" onClick={add} id="slot-add"><Plus size={16} /> Thêm khung giờ</button>
+      <PageHead
+        title="Lịch rảnh & Khung giờ PT"
+        desc="Mở khung giờ để hội viên đặt lịch tập 1-kèm-1 theo quy chuẩn vận hành của DFGymCenter."
+        actions={
+          <button className="btn sm" onClick={() => setShowRuleModal(true)}>
+            <Info size={15} /> Quy tắc mở khung giờ
+          </button>
+        }
+      />
+
+      {/* Card Quy tắc tóm tắt & Kiểm soát ca dạy */}
+      <div className="card mb16" style={{ background: 'var(--surface-2)', border: '1px solid var(--border)' }}>
+        <div className="row wrap between" style={{ gap: 12 }}>
+          <div className="row wrap" style={{ gap: 8, fontSize: 13 }}>
+            <span className="badge b-purple">Chi nhánh {selectedBranch?.name} ({selectedBranch?.openTime} – {selectedBranch?.closeTime})</span>
+            <span className={`badge ${slotsInSelectedDate >= 8 ? 'b-red' : 'b-green'}`}>
+              Ngày {fmtDate(date)}: {slotsInSelectedDate}/8 ca tối đa
+            </span>
+            <span className="badge b-blue">Mở trước ≥ 2h</span>
+            <span className="badge b-gray">Chống trùng ca</span>
+          </div>
+          <span className="small muted">
+            Tối đa 8 ca dạy / ngày để đảm bảo thể lực & chất lượng huấn luyện.
+          </span>
         </div>
       </div>
+
+      <div className="card mb16">
+        <div className="row wrap" style={{ alignItems: 'flex-end', gap: 12 }}>
+          <div className="field">
+            <label>Ngày</label>
+            <input type="date" className="input" min={todayStr()} value={date} onChange={(e) => setDate(e.target.value)} id="slot-date" />
+          </div>
+          <div className="field">
+            <label>Giờ bắt đầu</label>
+            <input type="time" className="input" value={time} onChange={(e) => setTime(e.target.value)} id="slot-time" />
+          </div>
+          <div className="field">
+            <label>Thời lượng</label>
+            <select className="input" value={dur} onChange={(e) => setDur(+e.target.value)}>
+              <option value={45}>45 phút (Cường độ cao)</option>
+              <option value={60}>60 phút (Tiêu chuẩn)</option>
+              <option value={90}>90 phút (Chuyên sâu)</option>
+            </select>
+          </div>
+          <div className="field">
+            <label>Chi nhánh</label>
+            <select className="input" value={branch} onChange={(e) => setBranch(e.target.value)}>
+              {branches.map((b) => <option key={b.id} value={b.id}>{b.name}</option>)}
+            </select>
+          </div>
+          <div className="field">
+            <label>Lặp lại hàng tuần</label>
+            <select className="input" value={repeat} onChange={(e) => setRepeat(+e.target.value)}>
+              <option value={1}>Không lặp lại</option>
+              <option value={2}>Lặp lại 2 tuần</option>
+              <option value={4}>Lặp lại 4 tuần</option>
+            </select>
+          </div>
+          <button className="btn primary" onClick={add} id="slot-add" disabled={slotsInSelectedDate >= 8}>
+            <Plus size={16} /> Thêm khung giờ
+          </button>
+        </div>
+      </div>
+
+      {showRuleModal && (
+        <Modal title="Quy tắc mở khung giờ PT dành cho Huấn Luyện Viên" onClose={() => setShowRuleModal(false)}>
+          <div className="col" style={{ gap: 14, fontSize: 13.5, lineHeight: 1.6 }}>
+            <div className="card" style={{ padding: 14, borderLeft: '4px solid var(--primary)' }}>
+              <b>1. Thời gian hoạt động chi nhánh</b>
+              <div className="muted mt8">Khung giờ mở lịch phải nằm hoàn toàn trong thời gian mở cửa của chi nhánh ({selectedBranch?.openTime} – {selectedBranch?.closeTime}). Không được đặt ca sớm hơn hoặc kết thúc muộn hơn giờ đóng cửa.</div>
+            </div>
+            <div className="card" style={{ padding: 14, borderLeft: '4px solid var(--teal)' }}>
+              <b>2. Đặt trước tối thiểu 2 tiếng</b>
+              <div className="muted mt8">HLV cần mở lịch trước giờ bắt đầu tối thiểu 2 giờ để hội viên kịp nhận diện khung giờ rảnh và đăng ký. Khung giờ trong quá khứ sẽ bị từ chối tự động.</div>
+            </div>
+            <div className="card" style={{ padding: 14, borderLeft: '4px solid var(--amber)' }}>
+              <b>3. Giới hạn tối đa 8 ca/ngày</b>
+              <div className="muted mt8">Mỗi HLV không được mở quá 8 ca dạy trong cùng một ngày nhằm đảm bảo năng lượng và sự tập trung cao nhất cho từng hội viên.</div>
+            </div>
+            <div className="card" style={{ padding: 14, borderLeft: '4px solid var(--blue)' }}>
+              <b>4. Thời lượng ca dạy chuẩn</b>
+              <div className="muted mt8">Chỉ chấp nhận 3 mốc thời lượng: 45 phút, 60 phút hoặc 90 phút theo giáo án chuẩn của hệ thống DFGymCenter.</div>
+            </div>
+            <div className="card" style={{ padding: 14, borderLeft: '4px solid var(--accent)' }}>
+              <b>5. Chống trùng ca & Lớp nhóm</b>
+              <div className="muted mt8">Hệ thống sẽ tự động quét và chặn mở lịch nếu trùng với ca PT rảnh khác hoặc trùng lịch dạy lớp nhóm (Group Fitness) đã được xếp lịch trước đó.</div>
+            </div>
+          </div>
+        </Modal>
+      )}
       <div style={{ overflowX: 'auto' }}>
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7, minmax(140px, 1fr))', gap: 10, minWidth: 1000 }}>
           {days.map((d) => {
