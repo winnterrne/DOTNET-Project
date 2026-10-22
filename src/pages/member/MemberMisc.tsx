@@ -2,8 +2,7 @@ import { useState, useMemo } from 'react';
 import { LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, Legend, CartesianGrid } from 'recharts';
 import {
   Save, Plus, Scale, Ruler, Percent, Dumbbell, Activity, Receipt, Wrench, QrCode, MapPin, Clock, Trash2, Wifi,
-  Sparkles, Utensils, Apple, Flame, Droplets, Target, ChevronRight, Info, Eye, CheckCircle2, TrendingUp, TrendingDown,
-  Printer, Copy, Check, History,
+  Sparkles, Utensils, Apple, Eye, Copy, Check, History,
 } from 'lucide-react';
 import { useApp } from '../../store/AppContext';
 import * as L from '../../store/logic';
@@ -69,13 +68,21 @@ export function MemberProfile() {
   );
 }
 
+type MetricKey = 'weight' | 'bodyFat' | 'muscleMass' | 'bmi' | 'waist' | 'chest' | 'hips';
+
+interface ChartClickState {
+  activePayload?: Array<{ payload?: BodyMetric }>;
+}
+
 /* ================= Tiến độ & AI Dinh Dưỡng ================= */
 export function MemberProgress() {
   const { db, user, act } = useApp();
   const [activeTab, setActiveTab] = useState<'progress' | 'nutrition'>('progress');
   const [openAddModal, setOpenAddModal] = useState(false);
   const [inspectedMetric, setInspectedMetric] = useState<BodyMetric | null>(null);
-  const [metricKey, setMetricKey] = useState<'weight' | 'bodyFat' | 'muscleMass' | 'bmi' | 'waist' | 'chest' | 'hips'>('weight');
+  const [selectedMilestoneId, setSelectedMilestoneId] = useState<string | null>(null);
+  const [metricKey, setMetricKey] = useState<MetricKey>('weight');
+  const [compareKey, setCompareKey] = useState<MetricKey | 'none'>('muscleMass');
 
   const list = useMemo(() => {
     return db.bodyMetrics
@@ -85,6 +92,10 @@ export function MemberProgress() {
 
   const first = list[0];
   const last = list.at(-1);
+  const activeMilestone = useMemo(() => {
+    if (!list.length) return undefined;
+    return list.find((m) => m.id === selectedMilestoneId) ?? list.at(-1);
+  }, [list, selectedMilestoneId]);
 
   const delta = (k: keyof BodyMetric) => {
     if (!first || !last) return 0;
@@ -93,17 +104,16 @@ export function MemberProgress() {
     return v1 != null && v2 != null ? +(v2 - v1).toFixed(1) : 0;
   };
 
-  const meta = {
-    weight: { label: 'Cân nặng (kg)', color: '#a78bfa' },
-    bmi: { label: 'Chỉ số BMI', color: '#ffb020' },
-    bodyFat: { label: 'Tỷ lệ mỡ (%)', color: '#ff5c8a' },
-    muscleMass: { label: 'Khối lượng cơ (kg)', color: '#00d1b2' },
-    waist: { label: 'Vòng eo (cm)', color: '#38bdf8' },
-    chest: { label: 'Vòng ngực (cm)', color: '#fb923c' },
-    hips: { label: 'Vòng mông (cm)', color: '#e879f9' },
+  const meta: Record<MetricKey, { label: string; color: string; unit: string }> = {
+    weight: { label: 'Cân nặng (kg)', color: '#4f46e5', unit: 'kg' },
+    bmi: { label: 'Chỉ số BMI', color: '#d97706', unit: '' },
+    bodyFat: { label: 'Tỷ lệ mỡ (%)', color: '#dc2626', unit: '%' },
+    muscleMass: { label: 'Khối lượng cơ (kg)', color: '#0d9488', unit: 'kg' },
+    waist: { label: 'Vòng eo (cm)', color: '#0284c7', unit: 'cm' },
+    chest: { label: 'Vòng ngực (cm)', color: '#7c3aed', unit: 'cm' },
+    hips: { label: 'Vòng mông (cm)', color: '#db2777', unit: 'cm' },
   };
 
-  // Tính tuổi hội viên từ ngày sinh
   const userAge = useMemo(() => {
     if (!user?.dob) return 25;
     const birth = new Date(user.dob);
@@ -115,23 +125,35 @@ export function MemberProgress() {
     return age > 0 ? age : 25;
   }, [user]);
 
+  const activeIdx = activeMilestone ? list.findIndex((m) => m.id === activeMilestone.id) : -1;
+  const prevMilestone = activeIdx > 0 ? list[activeIdx - 1] : undefined;
+
+  const diffFrom = (target: BodyMetric | undefined, base: BodyMetric | undefined, key: MetricKey): string => {
+    if (!target || !base) return '—';
+    const vNow = target[key];
+    const vBase = base[key];
+    if (typeof vNow !== 'number' || typeof vBase !== 'number') return '—';
+    const d = +(vNow - vBase).toFixed(1);
+    return `${d > 0 ? '+' : ''}${d}${meta[key].unit}`;
+  };
+
   return (
     <>
       <PageHead
-        title="Tiến độ, Chỉ số cơ thể & AI Dinh dưỡng"
+        title="Tiến Độ Thể Hình, Biểu Đồ Mốc Đo & AI Dinh Dưỡng"
         desc={
           first
-            ? `Bắt đầu từ ${fmtDate(first.date)} · Đã thực hiện ${list.length} lần đo kiểm tra thể hình.`
+            ? `Lộ trình từ ${fmtDate(first.date)} đến ${fmtDate(last!.date)} · Đã lưu ${list.length} mốc đo InBody.`
             : 'Ghi nhận mốc đo đầu tiên để theo dõi lộ trình thay đổi vóc dáng và nhận thực đơn dinh dưỡng chuẩn.'
         }
         actions={
           <div className="row" style={{ gap: 10 }}>
-            <button
-              className="btn primary"
-              onClick={() => setOpenAddModal(true)}
-              id="add-metric"
-            >
-              <Plus size={16} /> Ghi nhận mốc đo mới
+            <button className="btn" onClick={() => setActiveTab(activeTab === 'progress' ? 'nutrition' : 'progress')}>
+              <Sparkles size={15} color="var(--amber)" />
+              {activeTab === 'progress' ? 'Mở AI Dinh Dưỡng' : 'Quay lại Biểu đồ'}
+            </button>
+            <button className="btn primary" onClick={() => setOpenAddModal(true)} id="add-metric">
+              <Plus size={16} /> Thêm chỉ số / Mốc đo mới
             </button>
           </div>
         }
@@ -142,16 +164,16 @@ export function MemberProgress() {
         <button
           className={`chip ${activeTab === 'progress' ? 'on' : ''}`}
           onClick={() => setActiveTab('progress')}
-          style={{ padding: '8px 18px', fontSize: 14 }}
+          style={{ padding: '8px 18px', fontSize: 13.5 }}
         >
-          <Activity size={16} style={{ marginRight: 6 }} /> 1. Biểu đồ tiến độ & Mốc đo lịch sử ({list.length})
+          <Activity size={15} style={{ marginRight: 6, verticalAlign: -2 }} /> 1. Biểu đồ tiến độ & Lịch sử từng mốc đo ({list.length})
         </button>
         <button
           className={`chip ${activeTab === 'nutrition' ? 'on' : ''}`}
           onClick={() => setActiveTab('nutrition')}
-          style={{ padding: '8px 18px', fontSize: 14 }}
+          style={{ padding: '8px 18px', fontSize: 13.5 }}
         >
-          <Sparkles size={16} style={{ marginRight: 6, color: '#ffb020' }} /> 2. AI Gợi ý chế độ dinh dưỡng
+          <Sparkles size={15} style={{ marginRight: 6, verticalAlign: -2, color: 'var(--amber)' }} /> 2. AI Gợi ý chế độ dinh dưỡng cá nhân hóa
         </button>
       </div>
 
@@ -159,13 +181,10 @@ export function MemberProgress() {
         !last ? (
           <div className="card" style={{ padding: 48, textAlign: 'center' }}>
             <Empty
-              text="Chưa có mốc đo nào được lưu. Hãy bấm 'Ghi nhận mốc đo mới' để bắt đầu vẽ biểu đồ tiến độ!"
+              text="Chưa có mốc đo nào được lưu. Hãy bấm 'Thêm chỉ số / Mốc đo mới' để bắt đầu vẽ biểu đồ tiến độ!"
               icon={<Activity size={48} />}
             />
-            <button
-              className="btn primary mt16"
-              onClick={() => setOpenAddModal(true)}
-            >
+            <button className="btn primary mt16" onClick={() => setOpenAddModal(true)}>
               <Plus size={16} /> Nhập số đo ban đầu
             </button>
           </div>
@@ -177,88 +196,167 @@ export function MemberProgress() {
                 icon={<Scale size={22} />}
                 label="Cân nặng hiện tại"
                 value={`${last.weight} kg`}
-                color="#a78bfa"
-                trend={list.length > 1 ? { v: `${delta('weight') > 0 ? '+' : ''}${delta('weight')} kg`, up: delta('weight') <= 0 } : undefined}
+                color="#4f46e5"
+                trend={
+                  list.length > 1
+                    ? { v: `${delta('weight') > 0 ? '+' : ''}${delta('weight')} kg so với đầu kỳ`, up: delta('weight') <= 0 }
+                    : undefined
+                }
               />
               <StatCard
                 icon={<Ruler size={22} />}
                 label={`BMI · ${bmiLabel(last.bmi)}`}
                 value={last.bmi}
-                color="#ffb020"
-                trend={list.length > 1 ? { v: `${delta('bmi') > 0 ? '+' : ''}${delta('bmi')}`, up: delta('bmi') <= 0 } : undefined}
+                color="#d97706"
+                trend={
+                  list.length > 1
+                    ? { v: `${delta('bmi') > 0 ? '+' : ''}${delta('bmi')} điểm`, up: delta('bmi') <= 0 }
+                    : undefined
+                }
               />
               <StatCard
                 icon={<Percent size={22} />}
-                label="Tỷ lệ mỡ"
+                label="Tỷ lệ mỡ cơ thể"
                 value={last.bodyFat != null ? `${last.bodyFat}%` : '—'}
-                color="#ff5c8a"
-                trend={list.length > 1 && last.bodyFat != null ? { v: `${delta('bodyFat') > 0 ? '+' : ''}${delta('bodyFat')}%`, up: delta('bodyFat') <= 0 } : undefined}
+                color="#dc2626"
+                trend={
+                  list.length > 1 && last.bodyFat != null
+                    ? { v: `${delta('bodyFat') > 0 ? '+' : ''}${delta('bodyFat')}% mỡ`, up: delta('bodyFat') <= 0 }
+                    : undefined
+                }
               />
               <StatCard
                 icon={<Dumbbell size={22} />}
-                label="Khối lượng cơ"
+                label="Khối lượng cơ nạc"
                 value={last.muscleMass != null ? `${last.muscleMass} kg` : '—'}
-                color="#00d1b2"
-                trend={list.length > 1 && last.muscleMass != null ? { v: `${delta('muscleMass') > 0 ? '+' : ''}${delta('muscleMass')} kg`, up: delta('muscleMass') >= 0 } : undefined}
+                color="#0d9488"
+                trend={
+                  list.length > 1 && last.muscleMass != null
+                    ? { v: `${delta('muscleMass') > 0 ? '+' : ''}${delta('muscleMass')} kg cơ`, up: delta('muscleMass') >= 0 }
+                    : undefined
+                }
               />
             </div>
 
-            {/* KHỐI BIỂU ĐỒ TƯƠNG TÁC */}
+            {/* KHỐI BIỂU ĐỒ TƯƠNG TÁC + SO SÁNH KÉP */}
             <div className="card mb16">
               <div className="card-head between wrap" style={{ gap: 12 }}>
                 <div>
-                  <h2><Activity size={18} /> Biểu đồ theo dõi tiến độ cơ thể</h2>
+                  <h2>
+                    <Activity size={18} /> Biểu đồ theo dõi tiến độ qua từng mốc đo
+                  </h2>
                   <span className="small muted">
-                    Bấm vào từng điểm mốc trên biểu đồ để xem chi tiết so sánh và đánh giá thể trạng
+                    Chọn chỉ số muốn vẽ biểu đồ hoặc bấm trực tiếp vào bất kỳ mốc đo nào để xem lịch sử chi tiết
                   </span>
                 </div>
 
-                {/* Danh sách chỉ số có thể chọn xem trên biểu đồ */}
-                <div className="chips">
-                  {(Object.keys(meta) as (keyof typeof meta)[]).map((k) => (
-                    <button
-                      key={k}
-                      className={`chip ${metricKey === k ? 'on' : ''}`}
-                      onClick={() => setMetricKey(k)}
-                    >
-                      {meta[k].label}
-                    </button>
-                  ))}
+                <div className="row wrap" style={{ gap: 8 }}>
+                  <span className="small muted">So sánh kèm:</span>
+                  <select
+                    className="input sm"
+                    style={{ width: 'auto', minWidth: 165 }}
+                    value={compareKey}
+                    onChange={(e) => setCompareKey(e.target.value as MetricKey | 'none')}
+                  >
+                    <option value="none">— Không so sánh phụ —</option>
+                    {(Object.keys(meta) as MetricKey[])
+                      .filter((k) => k !== metricKey)
+                      .map((k) => (
+                        <option key={k} value={k}>
+                          + {meta[k].label}
+                        </option>
+                      ))}
+                  </select>
                 </div>
               </div>
 
-              <div style={{ height: 340, width: '100%', marginTop: 8 }}>
+              {/* Danh sách chỉ số chính */}
+              <div className="chips mb12">
+                {(Object.keys(meta) as MetricKey[]).map((k) => (
+                  <button
+                    key={k}
+                    className={`chip ${metricKey === k ? 'on' : ''}`}
+                    onClick={() => {
+                      setMetricKey(k);
+                      if (compareKey === k) setCompareKey('none');
+                    }}
+                  >
+                    {meta[k].label}
+                  </button>
+                ))}
+              </div>
+
+              <div style={{ height: 320, width: '100%', marginTop: 4 }}>
                 <ResponsiveContainer width="100%" height="100%">
                   <LineChart
                     data={list.map((m, idx) => ({
                       ...m,
-                      d: `${fmtDate(m.date).slice(0, 5)} (Lần ${idx + 1})`,
+                      d: `Lần ${idx + 1} (${fmtDate(m.date).slice(0, 5)})`,
                     }))}
-                    onClick={(state: any) => {
-                      if (state && state.activePayload && state.activePayload[0]) {
-                        const m = list.find((x) => x.id === state.activePayload[0].payload.id);
-                        if (m) setInspectedMetric(m);
+                    onClick={(state: unknown) => {
+                      const st = state as ChartClickState | null;
+                      const clicked = st?.activePayload?.[0]?.payload;
+                      if (clicked) {
+                        setSelectedMilestoneId(clicked.id);
                       }
                     }}
                   >
                     <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="var(--border)" />
                     <XAxis dataKey="d" axisLine={false} tickLine={false} tick={{ fill: 'var(--text-dim)', fontSize: 12 }} />
-                    <YAxis domain={['dataMin - 1', 'dataMax + 1']} axisLine={false} tickLine={false} width={45} tick={{ fill: 'var(--text-dim)', fontSize: 12 }} />
+                    <YAxis
+                      yAxisId="left"
+                      domain={['dataMin - 1', 'dataMax + 1']}
+                      axisLine={false}
+                      tickLine={false}
+                      width={45}
+                      tick={{ fill: meta[metricKey].color, fontSize: 12, fontWeight: 700 }}
+                    />
+                    {compareKey !== 'none' && (
+                      <YAxis
+                        yAxisId="right"
+                        orientation="right"
+                        domain={['dataMin - 1', 'dataMax + 1']}
+                        axisLine={false}
+                        tickLine={false}
+                        width={45}
+                        tick={{ fill: meta[compareKey].color, fontSize: 12, fontWeight: 700 }}
+                      />
+                    )}
                     <Tooltip
                       content={({ active, payload }) => {
                         if (active && payload && payload.length) {
                           const data = payload[0].payload as BodyMetric;
+                          const idx = list.findIndex((x) => x.id === data.id);
                           return (
-                            <div className="card" style={{ padding: '10px 14px', background: 'var(--surface)', border: '1px solid var(--border)', boxShadow: '0 4px 20px rgba(0,0,0,0.2)' }}>
+                            <div
+                              className="card"
+                              style={{
+                                padding: '12px 14px',
+                                background: 'var(--surface)',
+                                border: '1px solid var(--border-strong)',
+                                boxShadow: 'var(--shadow)',
+                              }}
+                            >
                               <div className="bold mb4" style={{ color: 'var(--primary)' }}>
-                                📅 Ngày đo: {fmtDate(data.date)}
+                                📅 Mốc #{idx + 1}: {fmtDate(data.date)}
                               </div>
-                              <div className="small">Cân nặng: <b>{data.weight} kg</b></div>
-                              <div className="small">BMI: <b>{data.bmi}</b> ({bmiLabel(data.bmi)})</div>
-                              {data.bodyFat != null && <div className="small">Mỡ: <b>{data.bodyFat}%</b></div>}
-                              {data.muscleMass != null && <div className="small">Cơ: <b>{data.muscleMass} kg</b></div>}
-                              {data.waist != null && <div className="small">Vòng eo: <b>{data.waist} cm</b></div>}
-                              <div className="small dim mt8" style={{ color: 'var(--primary)' }}>👉 Bấm vào điểm này để xem chi tiết mốc đo</div>
+                              <div className="small">
+                                Cân nặng: <b>{data.weight} kg</b> · BMI: <b>{data.bmi}</b>
+                              </div>
+                              {data.bodyFat != null && (
+                                <div className="small">
+                                  Tỷ lệ mỡ: <b>{data.bodyFat}%</b> · Cơ nạc: <b>{data.muscleMass ?? '—'} kg</b>
+                                </div>
+                              )}
+                              {(data.chest || data.waist || data.hips) && (
+                                <div className="small">
+                                  Số đo 3 vòng: <b>{data.chest ?? '—'} - {data.waist ?? '—'} - {data.hips ?? '—'} cm</b>
+                                </div>
+                              )}
+                              {data.note && <div className="small muted mt4">“{data.note}”</div>}
+                              <div className="small bold mt8" style={{ color: 'var(--primary)' }}>
+                                👉 Click để ghim xem mốc đo này bên dưới
+                              </div>
                             </div>
                           );
                         }
@@ -267,6 +365,7 @@ export function MemberProgress() {
                     />
                     <Legend />
                     <Line
+                      yAxisId="left"
                       type="monotone"
                       dataKey={metricKey}
                       name={meta[metricKey].label}
@@ -275,25 +374,160 @@ export function MemberProgress() {
                       dot={{ r: 6, fill: meta[metricKey].color, strokeWidth: 2, stroke: 'var(--surface)' }}
                       activeDot={{ r: 9, stroke: '#fff', strokeWidth: 2 }}
                     />
+                    {compareKey !== 'none' && (
+                      <Line
+                        yAxisId="right"
+                        type="monotone"
+                        dataKey={compareKey}
+                        name={meta[compareKey].label}
+                        stroke={meta[compareKey].color}
+                        strokeWidth={2.5}
+                        strokeDasharray="5 5"
+                        dot={{ r: 5, fill: meta[compareKey].color, strokeWidth: 2, stroke: 'var(--surface)' }}
+                      />
+                    )}
                   </LineChart>
                 </ResponsiveContainer>
               </div>
 
-              <div className="row between small muted mt12" style={{ padding: '8px 12px', background: 'var(--surface-2)', borderRadius: 8 }}>
-                <span>💡 <b>Mẹo xem mốc:</b> Bấm chuột trực tiếp vào các chấm tròn trên đường biểu đồ để mở cửa sổ so sánh chi tiết.</span>
-                <span className="bold">{list.length} mốc đo đã lưu</span>
+              {/* THANH CHỌN NHANH TỪNG MỐC ĐO LỊCH SỬ (MILESTONE TIMELINE SCRUBBER) */}
+              <div style={{ marginTop: 14, paddingTop: 14, borderTop: '1px solid var(--border)' }}>
+                <div className="row between wrap mb8">
+                  <span className="small bold">
+                    🎯 Chọn mốc đo lịch sử để xem chi tiết & so sánh ({list.length} mốc):
+                  </span>
+                  <span className="small muted">Bấm vào từng mốc bên dưới hoặc chấm tròn trên biểu đồ</span>
+                </div>
+                <div className="row wrap" style={{ gap: 8 }}>
+                  {list.map((m, idx) => {
+                    const isSel = activeMilestone?.id === m.id;
+                    return (
+                      <button
+                        key={m.id}
+                        type="button"
+                        onClick={() => setSelectedMilestoneId(m.id)}
+                        className="card hover"
+                        style={{
+                          padding: '8px 12px',
+                          cursor: 'pointer',
+                          borderRadius: 10,
+                          border: isSel ? '2px solid var(--primary)' : '1px solid var(--border)',
+                          background: isSel ? 'var(--primary-soft)' : 'var(--surface-2)',
+                          textAlign: 'left',
+                        }}
+                      >
+                        <div className="small bold" style={{ color: isSel ? 'var(--primary)' : 'var(--text)' }}>
+                          Lần {idx + 1} · {fmtDate(m.date).slice(0, 5)}
+                        </div>
+                        <div className="small dim" style={{ fontSize: 11 }}>
+                          {m[metricKey] ?? '—'} {meta[metricKey].unit}
+                        </div>
+                      </button>
+                    );
+                  })}
+                </div>
               </div>
+
+              {/* BẢNG PHÂN TÍCH MỐC ĐO ĐANG CHỌN (INLINE MILESTONE INSPECTOR) */}
+              {activeMilestone && (
+                <div
+                  className="card mt16"
+                  style={{
+                    background: 'var(--surface-2)',
+                    border: '1px solid var(--border-strong)',
+                    padding: 16,
+                  }}
+                >
+                  <div className="row between wrap mb12" style={{ gap: 10 }}>
+                    <div className="row wrap" style={{ gap: 10 }}>
+                      <Badge color="purple">
+                        Đang xem Mốc #{activeIdx + 1}/{list.length}
+                      </Badge>
+                      <h3 style={{ fontSize: 16 }}>Ngày đo: {fmtDate(activeMilestone.date)}</h3>
+                      {activeMilestone.id === first.id && <Badge color="amber" plain>Khởi điểm (Baseline)</Badge>}
+                      {activeMilestone.id === last.id && <Badge color="green">Mới nhất</Badge>}
+                    </div>
+                    <div className="row" style={{ gap: 8 }}>
+                      <button
+                        className="btn sm"
+                        onClick={() => setInspectedMetric(activeMilestone)}
+                      >
+                        <Eye size={14} /> Mở bảng so sánh đầy đủ
+                      </button>
+                      <button
+                        className="btn sm primary"
+                        onClick={() => setActiveTab('nutrition')}
+                      >
+                        <Sparkles size={14} /> Tính thực đơn AI theo mốc này
+                      </button>
+                    </div>
+                  </div>
+
+                  <div className="grid grid-4" style={{ gap: 10 }}>
+                    <div className="card" style={{ padding: '10px 12px' }}>
+                      <div className="small muted">Cân nặng & BMI</div>
+                      <div className="bold" style={{ fontSize: 16, marginTop: 2 }}>
+                        {activeMilestone.weight} kg · BMI {activeMilestone.bmi}
+                      </div>
+                      <div className="small dim mt4">
+                        So với lần trước: <b>{diffFrom(activeMilestone, prevMilestone, 'weight')}</b> · So với đầu kỳ:{' '}
+                        <b>{diffFrom(activeMilestone, first, 'weight')}</b>
+                      </div>
+                    </div>
+
+                    <div className="card" style={{ padding: '10px 12px' }}>
+                      <div className="small muted">Tỷ lệ mỡ cơ thể</div>
+                      <div className="bold" style={{ fontSize: 16, marginTop: 2, color: 'var(--red)' }}>
+                        {activeMilestone.bodyFat != null ? `${activeMilestone.bodyFat}%` : '—'}
+                      </div>
+                      <div className="small dim mt4">
+                        So với lần trước: <b>{diffFrom(activeMilestone, prevMilestone, 'bodyFat')}</b> · So với đầu kỳ:{' '}
+                        <b>{diffFrom(activeMilestone, first, 'bodyFat')}</b>
+                      </div>
+                    </div>
+
+                    <div className="card" style={{ padding: '10px 12px' }}>
+                      <div className="small muted">Khối lượng cơ nạc</div>
+                      <div className="bold" style={{ fontSize: 16, marginTop: 2, color: 'var(--accent)' }}>
+                        {activeMilestone.muscleMass != null ? `${activeMilestone.muscleMass} kg` : '—'}
+                      </div>
+                      <div className="small dim mt4">
+                        So với lần trước: <b>{diffFrom(activeMilestone, prevMilestone, 'muscleMass')}</b> · So với đầu kỳ:{' '}
+                        <b>{diffFrom(activeMilestone, first, 'muscleMass')}</b>
+                      </div>
+                    </div>
+
+                    <div className="card" style={{ padding: '10px 12px' }}>
+                      <div className="small muted">Số đo 3 vòng (Ngực - Eo - Mông)</div>
+                      <div className="bold" style={{ fontSize: 16, marginTop: 2, color: 'var(--primary)' }}>
+                        {activeMilestone.chest ?? '—'} / {activeMilestone.waist ?? '—'} / {activeMilestone.hips ?? '—'} cm
+                      </div>
+                      <div className="small dim mt4">
+                        Vòng eo so với đầu kỳ: <b>{diffFrom(activeMilestone, first, 'waist')}</b>
+                      </div>
+                    </div>
+                  </div>
+
+                  {activeMilestone.note && (
+                    <div className="small muted mt12" style={{ padding: '8px 12px', background: 'var(--surface)', borderRadius: 8 }}>
+                      📝 <b>Ghi chú huấn luyện tại mốc này:</b> “{activeMilestone.note}”
+                    </div>
+                  )}
+                </div>
+              )}
             </div>
 
             {/* BẢNG LỊCH SỬ TỪNG MỐC ĐO */}
             <div className="card">
               <div className="card-head between">
                 <div>
-                  <h2><History size={18} /> Lịch sử chi tiết các mốc đo ({list.length})</h2>
-                  <span className="small muted">Xem lại lịch sử, so sánh độ thay đổi thể hình và ghi chú</span>
+                  <h2>
+                    <History size={18} /> Bảng lịch sử toàn bộ các mốc đo ({list.length})
+                  </h2>
+                  <span className="small muted">Bấm vào bất kỳ dòng nào để xem chi tiết hoặc thêm mốc đo mới</span>
                 </div>
-                <button className="btn sm" onClick={() => setOpenAddModal(true)}>
-                  <Plus size={15} /> Thêm số đo
+                <button className="btn primary sm" onClick={() => setOpenAddModal(true)}>
+                  <Plus size={15} /> Thêm mốc đo mới
                 </button>
               </div>
 
@@ -301,32 +535,51 @@ export function MemberProgress() {
                 <table>
                   <thead>
                     <tr>
-                      <th>Ngày đo</th>
+                      <th>Mốc đo</th>
                       <th>Cân nặng</th>
-                      <th>Chiều cao</th>
                       <th>BMI</th>
                       <th>% Mỡ</th>
                       <th>Cơ nạc</th>
-                      <th>3 vòng (Ngực/Eo/Mông)</th>
-                      <th>Ghi chú</th>
+                      <th>3 vòng (Ngực / Eo / Mông)</th>
+                      <th>Ghi chú lộ trình</th>
                       <th style={{ textAlign: 'right' }}>Thao tác</th>
                     </tr>
                   </thead>
                   <tbody>
-                    {[...list].reverse().map((m, idx) => {
-                      const isFirst = m.id === first!.id;
-                      const isLatest = m.id === last!.id;
+                    {[...list].reverse().map((m, revIdx) => {
+                      const chronologicalIdx = list.length - revIdx;
+                      const isFirst = m.id === first.id;
+                      const isLatest = m.id === last.id;
+                      const isSelected = activeMilestone?.id === m.id;
                       return (
-                        <tr key={m.id} style={{ cursor: 'pointer' }} onClick={() => setInspectedMetric(m)}>
+                        <tr
+                          key={m.id}
+                          style={{
+                            cursor: 'pointer',
+                            background: isSelected ? 'var(--primary-soft)' : undefined,
+                          }}
+                          onClick={() => {
+                            setSelectedMilestoneId(m.id);
+                            setInspectedMetric(m);
+                          }}
+                        >
                           <td>
                             <div className="row" style={{ gap: 6 }}>
+                              <Badge color="slate" plain>
+                                #{chronologicalIdx}
+                              </Badge>
                               <b>{fmtDate(m.date)}</b>
                               {isLatest && <Badge color="green">Mới nhất</Badge>}
-                              {isFirst && <Badge color="purple" plain>Ban đầu</Badge>}
+                              {isFirst && (
+                                <Badge color="purple" plain>
+                                  Khởi điểm
+                                </Badge>
+                              )}
                             </div>
                           </td>
-                          <td><b>{m.weight}</b> kg</td>
-                          <td>{m.height} cm</td>
+                          <td>
+                            <b>{m.weight}</b> kg
+                          </td>
                           <td>
                             <Badge color={m.bmi >= 18.5 && m.bmi <= 23 ? 'green' : m.bmi > 25 ? 'red' : 'amber'}>
                               {m.bmi} · {bmiLabel(m.bmi)}
@@ -343,7 +596,7 @@ export function MemberProgress() {
                               <span className="dim">—</span>
                             )}
                           </td>
-                          <td className="small muted truncate" style={{ maxWidth: 160 }}>
+                          <td className="small muted truncate" style={{ maxWidth: 210 }}>
                             {m.note || '—'}
                           </td>
                           <td style={{ textAlign: 'right' }}>
@@ -356,7 +609,7 @@ export function MemberProgress() {
                                   setInspectedMetric(m);
                                 }}
                               >
-                                <Eye size={15} /> Xem
+                                <Eye size={15} /> So sánh
                               </button>
                               <button
                                 className="btn sm ghost"
@@ -385,9 +638,10 @@ export function MemberProgress() {
         /* TAB 2: AI GỢI Ý CHẾ ĐỘ DINH DƯỠNG (NUTRITION ADVISOR) */
         <NutritionAdvisor
           user={user!}
-          defaultWeight={last?.weight ?? 65}
-          defaultHeight={last?.height ?? 170}
-          defaultBodyFat={last?.bodyFat ?? 20}
+          metrics={list}
+          defaultWeight={activeMilestone?.weight ?? last?.weight ?? 65}
+          defaultHeight={activeMilestone?.height ?? last?.height ?? 170}
+          defaultBodyFat={activeMilestone?.bodyFat ?? last?.bodyFat ?? 20}
           defaultAge={userAge}
         />
       )}
@@ -397,6 +651,11 @@ export function MemberProgress() {
         <MetricModal
           lastHeight={last?.height}
           lastWeight={last?.weight}
+          lastBodyFat={last?.bodyFat}
+          lastMuscleMass={last?.muscleMass}
+          lastChest={last?.chest}
+          lastWaist={last?.waist}
+          lastHips={last?.hips}
           onClose={() => setOpenAddModal(false)}
         />
       )}
@@ -647,10 +906,20 @@ function CheckpointDetailModal({
 function MetricModal({
   lastHeight,
   lastWeight,
+  lastBodyFat,
+  lastMuscleMass,
+  lastChest,
+  lastWaist,
+  lastHips,
   onClose,
 }: {
   lastHeight?: number;
   lastWeight?: number;
+  lastBodyFat?: number;
+  lastMuscleMass?: number;
+  lastChest?: number;
+  lastWaist?: number;
+  lastHips?: number;
   onClose: () => void;
 }) {
   const { user, act } = useApp();
@@ -658,11 +927,11 @@ function MetricModal({
     date: todayStr(),
     weight: String(lastWeight ?? ''),
     height: String(lastHeight ?? ''),
-    bodyFat: '',
-    muscleMass: '',
-    chest: '',
-    waist: '',
-    hips: '',
+    bodyFat: String(lastBodyFat ?? ''),
+    muscleMass: String(lastMuscleMass ?? ''),
+    chest: String(lastChest ?? ''),
+    waist: String(lastWaist ?? ''),
+    hips: String(lastHips ?? ''),
     note: '',
   });
 
@@ -808,12 +1077,14 @@ function MetricModal({
 /* ================= COMPONENT AI GỢI Ý CHẾ ĐỘ DINH DƯỠNG ================= */
 function NutritionAdvisor({
   user,
+  metrics,
   defaultWeight,
   defaultHeight,
   defaultBodyFat,
   defaultAge,
 }: {
   user: User;
+  metrics: BodyMetric[];
   defaultWeight: number;
   defaultHeight: number;
   defaultBodyFat: number;
@@ -829,10 +1100,11 @@ function NutritionAdvisor({
   const [goal, setGoal] = useState<'lose_fat' | 'build_muscle' | 'maintain' | 'endurance'>('lose_fat');
   const [activityLevel, setActivityLevel] = useState<'sedentary' | 'light' | 'moderate' | 'high'>('moderate');
   const [dietStyle, setDietStyle] = useState<'eat_clean' | 'high_protein' | 'vegetarian' | 'low_carb'>('high_protein');
+  const [dayMode, setDayMode] = useState<'training' | 'rest'>('training');
 
   // Tính toán kế hoạch dinh dưỡng bằng thuật toán DFGym AI
   const plan = useMemo(() => {
-    return L.calculateNutritionPlan({
+    const basePlan = L.calculateNutritionPlan({
       gender,
       age: +age || 25,
       weight: +weight || 65,
@@ -842,7 +1114,26 @@ function NutritionAdvisor({
       activityLevel,
       dietStyle,
     });
-  }, [gender, age, weight, height, bodyFat, goal, activityLevel, dietStyle]);
+    if (dayMode === 'rest') {
+      const restCal = Math.max(1200, basePlan.targetCalories - 180);
+      return {
+        ...basePlan,
+        targetCalories: restCal,
+        deficitOrSurplus: restCal - basePlan.tdee,
+        macros: {
+          ...basePlan.macros,
+          carbs: Math.max(60, basePlan.macros.carbs - 45),
+        },
+      };
+    }
+    return basePlan;
+  }, [gender, age, weight, height, bodyFat, goal, activityLevel, dietStyle, dayMode]);
+
+  const applyMilestone = (m: BodyMetric) => {
+    setWeight(m.weight);
+    setHeight(m.height);
+    if (m.bodyFat != null) setBodyFat(m.bodyFat);
+  };
 
   const copyPlan = () => {
     const text = `=== THỰC ĐƠN DINH DƯỠNG DFGym AI ===\n` +
@@ -905,12 +1196,44 @@ function NutritionAdvisor({
 
       {/* BỘ ĐIỀU KHIỂN THỂ TRẠNG & MỤC TIÊU CỦA HỘI VIÊN */}
       <div className="card" style={{ padding: 18 }}>
-        <h3 className="mb12" style={{ fontSize: 15 }}>⚙️ Cấu hình thể trạng & Thói quen tập luyện</h3>
+        <div className="row between wrap mb12" style={{ gap: 10 }}>
+          <h3 style={{ fontSize: 15 }}>⚙️ Cấu hình thể trạng & Đồng bộ từ Mốc đo InBody</h3>
+          <div className="tabs" style={{ padding: 3 }}>
+            <button className={`tab ${dayMode === 'training' ? 'on' : ''}`} onClick={() => setDayMode('training')}>
+              🔥 Ngày có tập luyện
+            </button>
+            <button className={`tab ${dayMode === 'rest' ? 'on' : ''}`} onClick={() => setDayMode('rest')}>
+              🌿 Ngày nghỉ phục hồi (-180 kcal)
+            </button>
+          </div>
+        </div>
+
+        {metrics.length > 0 && (
+          <div className="mb16" style={{ padding: '10px 12px', background: 'var(--surface-2)', borderRadius: 10 }}>
+            <div className="small bold muted mb6">Đồng bộ nhanh chỉ số từ lịch sử mốc đo của bạn:</div>
+            <div className="chips">
+              {metrics.map((m, idx) => (
+                <button
+                  key={m.id}
+                  type="button"
+                  className={`chip ${weight === m.weight && bodyFat === (m.bodyFat ?? bodyFat) ? 'on' : ''}`}
+                  onClick={() => applyMilestone(m)}
+                >
+                  Lần {idx + 1} ({fmtDate(m.date).slice(0, 5)}): {m.weight}kg {m.bodyFat ? `· ${m.bodyFat}% mỡ` : ''}
+                </button>
+              ))}
+            </div>
+          </div>
+        )}
 
         <div className="grid g4 mb16" style={{ gap: 12 }}>
           <div className="field">
             <label className="small">Giới tính</label>
-            <select className="input sm" value={gender} onChange={(e) => setGender(e.target.value as any)}>
+            <select
+              className="input sm"
+              value={gender}
+              onChange={(e) => setGender(e.target.value as 'male' | 'female' | 'other')}
+            >
               <option value="male">Nam giới</option>
               <option value="female">Nữ giới</option>
               <option value="other">Khác</option>
@@ -937,7 +1260,11 @@ function NutritionAdvisor({
           {/* MỤC TIÊU THỂ HÌNH */}
           <div className="field">
             <label className="small bold">🎯 Mục tiêu của bạn</label>
-            <select className="input sm" value={goal} onChange={(e) => setGoal(e.target.value as any)}>
+            <select
+              className="input sm"
+              value={goal}
+              onChange={(e) => setGoal(e.target.value as 'lose_fat' | 'build_muscle' | 'maintain' | 'endurance')}
+            >
               <option value="lose_fat">Giảm mỡ & Siết cơ (Fat Loss & Cut -500 kcal)</option>
               <option value="build_muscle">Tăng cơ nạc (Lean Bulking +350 kcal)</option>
               <option value="maintain">Duy trì vóc dáng & Thể lực (Maintenance)</option>
@@ -948,7 +1275,11 @@ function NutritionAdvisor({
           {/* CƯỜNG ĐỘ VẬN ĐỘNG */}
           <div className="field">
             <label className="small bold">⚡ Mức độ vận động / Tuần</label>
-            <select className="input sm" value={activityLevel} onChange={(e) => setActivityLevel(e.target.value as any)}>
+            <select
+              className="input sm"
+              value={activityLevel}
+              onChange={(e) => setActivityLevel(e.target.value as 'sedentary' | 'light' | 'moderate' | 'high')}
+            >
               <option value="sedentary">Ít vận động (Văn phòng, 1.2x BMR)</option>
               <option value="light">Vận động nhẹ (Tập 1-2 buổi/tuần, 1.375x BMR)</option>
               <option value="moderate">Vừa phải (Tập 3-5 buổi/tuần, 1.55x BMR)</option>
@@ -959,7 +1290,11 @@ function NutritionAdvisor({
           {/* PHONG CÁCH ẨM THỰC */}
           <div className="field">
             <label className="small bold">🥗 Phong cách ăn uống</label>
-            <select className="input sm" value={dietStyle} onChange={(e) => setDietStyle(e.target.value as any)}>
+            <select
+              className="input sm"
+              value={dietStyle}
+              onChange={(e) => setDietStyle(e.target.value as 'eat_clean' | 'high_protein' | 'vegetarian' | 'low_carb')}
+            >
               <option value="high_protein">High Protein (Gymer, tăng cơ giảm mỡ)</option>
               <option value="eat_clean">Eat Clean & Cân bằng (Healthy Lifestyle)</option>
               <option value="low_carb">Low Carb (Hạn chế tinh bột)</option>

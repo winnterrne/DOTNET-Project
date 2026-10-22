@@ -4,13 +4,43 @@ import type { DB, User } from '../types';
 import { createSeed } from './seed';
 import { runScheduler } from './logic';
 
-const KEY = 'dfgym_db_v1';
+const KEY = 'dfgym_db_v2_hcm';
 const SESSION_KEY = 'dfgym_session_v1';
 
 function load(): DB {
   try {
     const raw = localStorage.getItem(KEY);
-    if (raw) return JSON.parse(raw) as DB;
+    if (raw) {
+      const parsed = JSON.parse(raw) as DB;
+      // Tự động bổ sung số đo 3 vòng và ghi chú cho dữ liệu localStorage cũ nếu chưa có
+      const m1Notes = [
+        'Khởi điểm: Đo InBody lần đầu, bắt đầu lộ trình giảm mỡ tăng cơ',
+        'Tuần 2: Quen nhịp cardio & cắt nước ngọt có gas',
+        'Tuần 4: Tăng mức tạ Squat & Deadlift thêm 10kg',
+        'Tuần 6: Giảm rõ mỡ vùng bụng, cơ ngực bắt đầu dày hơn',
+        'Tuần 8: Duy trì ăn giàu đạm 155g/ngày theo gợi ý AI',
+        'Tuần 10: Thể lực bền bỉ, hoàn thành HIIT 45 phút không hụt hơi',
+        'Tuần 11: Siết nét cơ vai & lưng xô, vòng eo giảm gần 8cm',
+        'Hiện tại: Đạt mốc dưới 20% mỡ cơ thể, chuẩn bị chu kỳ Lean Bulk',
+      ];
+      let m1Idx = 0;
+      parsed.bodyMetrics?.forEach((bm) => {
+        if (bm.memberId === 'm1') {
+          if (bm.chest === undefined) bm.chest = +(96 + m1Idx * 0.55).toFixed(1);
+          if (bm.waist === undefined) bm.waist = +(88.5 - m1Idx * 1.25).toFixed(1);
+          if (bm.hips === undefined) bm.hips = +(97.5 - m1Idx * 0.28).toFixed(1);
+          if (!bm.note || bm.note === 'Lần đo đầu tiên') {
+            bm.note = m1Notes[m1Idx] || 'Đo định kỳ tại phòng tập';
+          }
+          m1Idx++;
+        } else if (bm.chest === undefined) {
+          bm.chest = 86;
+          bm.waist = 70;
+          bm.hips = 93;
+        }
+      });
+      return parsed;
+    }
   } catch {
     /* ignore */
   }
@@ -47,7 +77,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const [userId, setUserId] = useState<string | null>(() => localStorage.getItem(SESSION_KEY));
   const [toasts, setToasts] = useState<Toast[]>([]);
   const [theme, setTheme] = useState<'light' | 'dark'>(() => {
-    return (localStorage.getItem('dfgym_theme') as 'light' | 'dark') || 'dark';
+    return (localStorage.getItem('dfgym_theme') as 'light' | 'dark') || 'light';
   });
   const dbRef = useRef(db);
   dbRef.current = db;

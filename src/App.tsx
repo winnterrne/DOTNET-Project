@@ -115,6 +115,7 @@ export default function App() {
           <Route element={<SharedLayout />}>
             <Route path="/notifications" element={<NotificationsPage />} />
             <Route path="/account" element={<AccountPage />} />
+            <Route path="/rules" element={<GymRules />} />
           </Route>
 
           {/* Fallback */}

@@ -20,5 +20,16 @@ dist-ssr
 *.suo
 *.ntvs*
 *.njsproj
-*.sln
 *.sw?
+
+# .NET build artifacts
+bin/
+obj/
+[Bb]in/
+[Oo]bj/
+.vs/
+*.user
+*.userosscache
+*.suo
+*.sln.docstates
+

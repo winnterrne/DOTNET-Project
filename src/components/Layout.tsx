@@ -177,6 +177,7 @@ export function Layout({ role }: { role: Role }) {
             </div>
           ))}
           <div className="nav-section">Khác</div>
+          <NavLink to="/rules"><BookOpen size={18} />Nội quy & Quy tắc</NavLink>
           <NavLink to="/notifications"><Bell size={18} />Thông báo</NavLink>
         </nav>
         <div className="sidebar-foot col">
@@ -198,12 +199,23 @@ export function Layout({ role }: { role: Role }) {
           {branch && <Badge color="purple">{branch.name}</Badge>}
           <div className="spacer" />
           <button
-            className="icon-btn theme-toggle-btn"
+            className="btn ghost sm theme-toggle-btn"
             onClick={toggleTheme}
-            title={theme === 'light' ? 'Chuyển sang giao diện tối' : 'Chuyển sang giao diện sáng'}
+            title={theme === 'light' ? 'Chuyển sang giao diện tối dịu mắt' : 'Chuyển sang giao diện sáng dịu mắt'}
             aria-label="Đổi theme"
+            style={{ borderRadius: 999, padding: '6px 12px', gap: 6 }}
           >
-            {theme === 'light' ? <Moon size={18} /> : <Sun size={18} color="#ffb020" />}
+            {theme === 'light' ? (
+              <>
+                <Moon size={16} color="var(--primary)" />
+                <span className="small bold">Tối dịu</span>
+              </>
+            ) : (
+              <>
+                <Sun size={16} color="#f59e0b" />
+                <span className="small bold">Sáng dịu</span>
+              </>
+            )}
           </button>
           <NotificationBell />
           <div className="row" style={{ gap: 10 }}>
