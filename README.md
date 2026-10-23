@@ -11,7 +11,7 @@ DOTNET-Project/
 │   └── src/
 │       ├── DFGymCenter.Domain/           # Entities, Enums, Exceptions
 │       ├── DFGymCenter.Application/      # DTOs, Services Interfaces & Logic
-│       ├── DFGymCenter.Infrastructure/   # EF Core DbContext, Configurations, Migrations
+│       ├── DFGymCenter.Infrastructure/   # EF Core DbContext, Configurations, 
 │       └── DFGymCenter.API/              # Controllers, Middlewares, Program.cs
 │
 ├── frontend/                 # React 19 + TypeScript + Vite UI
