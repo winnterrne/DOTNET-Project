@@ -1,32 +1,43 @@
-# React + TypeScript + Vite
+# DFGymCenter - Gym Management System
 
-This template provides a minimal setup to get React working in Vite with HMR and some Oxlint rules.
+Hệ thống quản lý phòng gym DFGymCenter gồm 2 phần: Frontend và Backend.
 
-Currently, two official plugins are available:
+## Cấu trúc thư mục (Project Structure)
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Oxc](https://oxc.rs)
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/)
-
-## React Compiler
-
-The React Compiler is not enabled on this template because of its impact on dev & build performances. To add it, see [this documentation](https://react.dev/learn/react-compiler/installation).
-
-## Expanding the Oxlint configuration
-
-If you are developing a production application, we recommend enabling type-aware lint rules by installing `oxlint-tsgolint` and editing `.oxlintrc.json`:
-
-```json
-{
-  "$schema": "./node_modules/oxlint/configuration_schema.json",
-  "plugins": ["react", "typescript", "oxc"],
-  "options": {
-    "typeAware": true
-  },
-  "rules": {
-    "react/rules-of-hooks": "error",
-    "react/only-export-components": ["warn", { "allowConstantExport": true }]
-  }
-}
+```text
+DOTNET-Project/
+├── backend/                  # .NET 10 Web API Clean Architecture
+│   ├── DFGymCenter.slnx      # Solution file
+│   └── src/
+│       ├── DFGymCenter.Domain/           # Entities, Enums, Exceptions
+│       ├── DFGymCenter.Application/      # DTOs, Services Interfaces & Logic
+│       ├── DFGymCenter.Infrastructure/   # EF Core DbContext, Configurations, Migrations
+│       └── DFGymCenter.API/              # Controllers, Middlewares, Program.cs
+│
+├── frontend/                 # React 19 + TypeScript + Vite UI
+│   ├── src/                  # Components, Pages, Stores, Types
+│   ├── public/               # Static assets & icons
+│   ├── package.json          # Frontend dependencies & scripts
+│   └── vite.config.ts        # Vite configuration
+│
+└── README.md
 ```
 
-See the [Oxlint rules documentation](https://oxc.rs/docs/guide/usage/linter/rules) for the full list of rules and categories.
+## Hướng dẫn chạy dự án (Getting Started)
+
+### 1. Frontend
+```bash
+cd frontend
+npm install
+npm run dev
+```
+Truy cập giao diện tại: `http://localhost:5173`
+
+### 2. Backend
+Yêu cầu: [.NET 10 SDK](https://dotnet.microsoft.com/)
+```bash
+cd backend
+dotnet restore DFGymCenter.slnx
+dotnet run --project src/DFGymCenter.API
+```
+API & Swagger/OpenAPI sẽ khởi chạy tại cổng được cấu hình trong `launchSettings.json`.
