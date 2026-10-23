@@ -1,0 +1,8 @@
+<Solution>
+  <Folder Name="/src/">
+    <Project Path="src/DFGymCenter.API/DFGymCenter.API.csproj" />
+    <Project Path="src/DFGymCenter.Application/DFGymCenter.Application.csproj" />
+    <Project Path="src/DFGymCenter.Domain/DFGymCenter.Domain.csproj" />
+    <Project Path="src/DFGymCenter.Infrastructure/DFGymCenter.Infrastructure.csproj" />
+  </Folder>
+</Solution>
