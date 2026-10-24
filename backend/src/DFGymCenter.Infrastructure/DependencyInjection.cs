@@ -40,6 +40,14 @@ public static class DependencyInjection
         services.AddScoped<IReviewRepository, ReviewRepository>();
         services.AddScoped<INotificationRepository, NotificationRepository>();
 
+        // Repositories mới bổ sung
+        services.AddScoped<ISystemSettingRepository, SystemSettingRepository>();
+        services.AddScoped<INutritionPlanRepository, NutritionPlanRepository>();
+        services.AddScoped<IBodyMeasurementRepository, BodyMeasurementRepository>();
+        services.AddScoped<IMetricTypeRepository, MetricTypeRepository>();
+        services.AddScoped<IMeasurementValueRepository, MeasurementValueRepository>();
+        services.AddScoped<IGymNewsRepository, GymNewsRepository>();
+
         return services;
     }
 }

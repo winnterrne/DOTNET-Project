@@ -36,6 +36,14 @@ public class ApplicationDbContext : DbContext, IApplicationDbContext
     public DbSet<Review> Reviews => Set<Review>();
     public DbSet<Notification> Notifications => Set<Notification>();
 
+    // Thực thể mới bổ sung từ sơ đồ ERD cập nhật
+    public DbSet<SystemSetting> SystemSettings => Set<SystemSetting>();
+    public DbSet<NutritionPlan> NutritionPlans => Set<NutritionPlan>();
+    public DbSet<BodyMeasurement> BodyMeasurements => Set<BodyMeasurement>();
+    public DbSet<MetricType> MetricTypes => Set<MetricType>();
+    public DbSet<MeasurementValue> MeasurementValues => Set<MeasurementValue>();
+    public DbSet<GymNews> GymNews => Set<GymNews>();
+
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
         base.OnModelCreating(modelBuilder);

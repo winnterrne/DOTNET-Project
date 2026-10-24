@@ -29,5 +29,13 @@ public interface IApplicationDbContext
     DbSet<Review> Reviews { get; }
     DbSet<Notification> Notifications { get; }
 
+    // Thực thể mới bổ sung từ sơ đồ ERD cập nhật
+    DbSet<SystemSetting> SystemSettings { get; }
+    DbSet<NutritionPlan> NutritionPlans { get; }
+    DbSet<BodyMeasurement> BodyMeasurements { get; }
+    DbSet<MetricType> MetricTypes { get; }
+    DbSet<MeasurementValue> MeasurementValues { get; }
+    DbSet<GymNews> GymNews { get; }
+
     Task<int> SaveChangesAsync(CancellationToken cancellationToken = default);
 }
