@@ -10,3 +10,4 @@ public class GymNewsRepository : GenericRepository<GymNews>, IGymNewsRepository
     {
     }
 }
+

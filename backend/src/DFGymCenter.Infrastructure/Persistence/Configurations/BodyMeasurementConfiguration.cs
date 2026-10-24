@@ -10,3 +10,4 @@ public class BodyMeasurementConfiguration : IEntityTypeConfiguration<BodyMeasure
     {
     }
 }
+

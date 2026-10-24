@@ -10,3 +10,4 @@ public class BodyMeasurementRepository : GenericRepository<BodyMeasurement>, IBo
     {
     }
 }
+

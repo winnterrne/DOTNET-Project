@@ -10,3 +10,4 @@ public class GymNewsConfiguration : IEntityTypeConfiguration<GymNews>
     {
     }
 }
+

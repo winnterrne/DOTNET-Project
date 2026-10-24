@@ -10,3 +10,4 @@ public class MetricTypeRepository : GenericRepository<MetricType>, IMetricTypeRe
     {
     }
 }
+

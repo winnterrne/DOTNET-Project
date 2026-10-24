@@ -5,3 +5,4 @@ namespace DFGymCenter.Domain.Entities;
 public class MeasurementValue : BaseEntity
 {
 }
+

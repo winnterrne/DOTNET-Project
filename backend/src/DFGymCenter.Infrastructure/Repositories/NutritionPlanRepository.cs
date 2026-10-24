@@ -10,3 +10,4 @@ public class NutritionPlanRepository : GenericRepository<NutritionPlan>, INutrit
     {
     }
 }
+

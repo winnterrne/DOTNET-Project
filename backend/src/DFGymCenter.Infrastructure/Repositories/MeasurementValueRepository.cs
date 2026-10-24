@@ -10,3 +10,4 @@ public class MeasurementValueRepository : GenericRepository<MeasurementValue>, I
     {
     }
 }
+

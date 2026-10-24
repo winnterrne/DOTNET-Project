@@ -10,3 +10,4 @@ public class SystemSettingRepository : GenericRepository<SystemSetting>, ISystem
     {
     }
 }
+
