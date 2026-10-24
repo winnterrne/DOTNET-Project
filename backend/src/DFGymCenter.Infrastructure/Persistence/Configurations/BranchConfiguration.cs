@@ -44,3 +44,4 @@ public class BranchConfiguration : IEntityTypeConfiguration<Branch>
         builder.HasIndex(b => b.District);
     }
 }
+
