@@ -6,7 +6,7 @@ namespace DFGymCenter.Infrastructure.Repositories;
 
 public class EquipmentRepository : GenericRepository<Equipment>, IEquipmentRepository
 {
-    public EquipmentRepository(ApplicationDbContext context) : base(context)
+    public EquipmentRepository(AppDbContext context) : base(context)
     {
     }
 }

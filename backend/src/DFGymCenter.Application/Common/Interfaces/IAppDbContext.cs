@@ -3,7 +3,7 @@ using Microsoft.EntityFrameworkCore;
 
 namespace DFGymCenter.Application.Common.Interfaces;
 
-public interface IApplicationDbContext
+public interface IAppDbContext
 {
     DbSet<User> Users { get; }
     DbSet<Staff> Staff { get; }
@@ -25,17 +25,18 @@ public interface IApplicationDbContext
     DbSet<Equipment> Equipments { get; }
     DbSet<EquipmentIssue> EquipmentIssues { get; }
     DbSet<EquipmentIssueLog> EquipmentIssueLogs { get; }
-    DbSet<BodyMetric> BodyMetrics { get; }
     DbSet<Review> Reviews { get; }
     DbSet<Notification> Notifications { get; }
-
-    // Thực thể mới bổ sung từ sơ đồ ERD cập nhật
-    DbSet<SystemSetting> SystemSettings { get; }
-    DbSet<NutritionPlan> NutritionPlans { get; }
     DbSet<BodyMeasurement> BodyMeasurements { get; }
     DbSet<MetricType> MetricTypes { get; }
     DbSet<MeasurementValue> MeasurementValues { get; }
-    DbSet<GymNews> GymNews { get; }
+    DbSet<NutritionPlan> NutritionPlans { get; }
+    DbSet<GymRule> GymRules { get; }
+    DbSet<SystemSetting> SystemSettings { get; }
 
     Task<int> SaveChangesAsync(CancellationToken cancellationToken = default);
+}
+
+public interface IApplicationDbContext : IAppDbContext
+{
 }

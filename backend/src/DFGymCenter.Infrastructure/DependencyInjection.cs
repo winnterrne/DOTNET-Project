@@ -16,11 +16,13 @@ public static class DependencyInjection
         var connectionString = configuration.GetConnectionString("DefaultConnection") 
             ?? "Server=(localdb)\\mssqllocaldb;Database=DFGymCenterDb;Trusted_Connection=True;MultipleActiveResultSets=true;TrustServerCertificate=True";
 
-        services.AddDbContext<ApplicationDbContext>(options =>
-            options.UseSqlServer(connectionString, b => b.MigrationsAssembly(typeof(ApplicationDbContext).Assembly.FullName)));
+        services.AddDbContext<AppDbContext>(options =>
+            options.UseSqlServer(connectionString, b => b.MigrationsAssembly(typeof(AppDbContext).Assembly.FullName)));
 
-        services.AddScoped<IApplicationDbContext>(provider => provider.GetRequiredService<ApplicationDbContext>());
-        services.AddScoped<ApplicationDbContextInitialiser>();
+        services.AddScoped<IAppDbContext>(provider => provider.GetRequiredService<AppDbContext>());
+        services.AddScoped<IApplicationDbContext>(provider => provider.GetRequiredService<AppDbContext>());
+        services.AddScoped<AppDbContextInitialiser>();
+        services.AddScoped<ITokenService, TokenService>();
 
         // Đăng ký Unit of Work và Repositories từ tầng Domain
         services.AddScoped<IUnitOfWork, UnitOfWork>();
@@ -40,7 +42,7 @@ public static class DependencyInjection
         services.AddScoped<IReviewRepository, ReviewRepository>();
         services.AddScoped<INotificationRepository, NotificationRepository>();
 
-        // Repositories mới bổ sung
+        // Repositories bổ sung
         services.AddScoped<ISystemSettingRepository, SystemSettingRepository>();
         services.AddScoped<INutritionPlanRepository, NutritionPlanRepository>();
         services.AddScoped<IBodyMeasurementRepository, BodyMeasurementRepository>();

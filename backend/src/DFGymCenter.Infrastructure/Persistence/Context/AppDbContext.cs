@@ -6,12 +6,13 @@ using Microsoft.EntityFrameworkCore;
 
 namespace DFGymCenter.Infrastructure.Persistence.Context;
 
-public class ApplicationDbContext : DbContext, IApplicationDbContext
+public class AppDbContext : DbContext, IAppDbContext, IApplicationDbContext
 {
-    public ApplicationDbContext(DbContextOptions<ApplicationDbContext> options) : base(options)
+    public AppDbContext(DbContextOptions<AppDbContext> options) : base(options)
     {
     }
 
+    // 28 Entities theo sơ đồ ERD chuẩn
     public DbSet<User> Users => Set<User>();
     public DbSet<Staff> Staff => Set<Staff>();
     public DbSet<Trainer> Trainers => Set<Trainer>();
@@ -32,17 +33,14 @@ public class ApplicationDbContext : DbContext, IApplicationDbContext
     public DbSet<Equipment> Equipments => Set<Equipment>();
     public DbSet<EquipmentIssue> EquipmentIssues => Set<EquipmentIssue>();
     public DbSet<EquipmentIssueLog> EquipmentIssueLogs => Set<EquipmentIssueLog>();
-    public DbSet<BodyMetric> BodyMetrics => Set<BodyMetric>();
     public DbSet<Review> Reviews => Set<Review>();
     public DbSet<Notification> Notifications => Set<Notification>();
-
-    // Thực thể mới bổ sung từ sơ đồ ERD cập nhật
-    public DbSet<SystemSetting> SystemSettings => Set<SystemSetting>();
-    public DbSet<NutritionPlan> NutritionPlans => Set<NutritionPlan>();
     public DbSet<BodyMeasurement> BodyMeasurements => Set<BodyMeasurement>();
     public DbSet<MetricType> MetricTypes => Set<MetricType>();
     public DbSet<MeasurementValue> MeasurementValues => Set<MeasurementValue>();
-    public DbSet<GymNews> GymNews => Set<GymNews>();
+    public DbSet<NutritionPlan> NutritionPlans => Set<NutritionPlan>();
+    public DbSet<GymRule> GymRules => Set<GymRule>();
+    public DbSet<SystemSetting> SystemSettings => Set<SystemSetting>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {

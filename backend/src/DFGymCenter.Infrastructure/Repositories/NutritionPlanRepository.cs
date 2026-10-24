@@ -6,7 +6,7 @@ namespace DFGymCenter.Infrastructure.Repositories;
 
 public class NutritionPlanRepository : GenericRepository<NutritionPlan>, INutritionPlanRepository
 {
-    public NutritionPlanRepository(ApplicationDbContext context) : base(context)
+    public NutritionPlanRepository(AppDbContext context) : base(context)
     {
     }
 }

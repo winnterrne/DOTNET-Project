@@ -2,6 +2,7 @@ using DFGymCenter.API.Extensions;
 using DFGymCenter.API.Middlewares;
 using DFGymCenter.Application;
 using DFGymCenter.Infrastructure;
+using Microsoft.AspNetCore.Authentication;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -9,11 +10,22 @@ var builder = WebApplication.CreateBuilder(args);
 builder.Services.AddApplicationServices();
 builder.Services.AddInfrastructureServices(builder.Configuration);
 
-// 2. Cấu hình Controllers & OpenAPI
+// 2. Cấu hình JWT Authentication & Role-based Authorization
+builder.Services
+    .AddAuthentication(options =>
+    {
+        options.DefaultAuthenticateScheme = "Bearer";
+        options.DefaultChallengeScheme = "Bearer";
+    })
+    .AddScheme<AuthenticationSchemeOptions, JwtAuthenticationHandler>("Bearer", null);
+
+builder.Services.AddAuthorization();
+
+// 3. Cấu hình Controllers & OpenAPI
 builder.Services.AddControllers();
 builder.Services.AddOpenApi();
 
-// 3. Cấu hình CORS cho Frontend React (Vite / Next.js)
+// 4. Cấu hình CORS cho Frontend React (Vite / Next.js)
 builder.Services.AddCors(options =>
 {
     options.AddPolicy("AllowFrontend", policy =>
@@ -27,23 +39,23 @@ builder.Services.AddCors(options =>
 
 var app = builder.Build();
 
-// 4. Kích hoạt tự động tạo lại Database & Seed dữ liệu (Cứu hộ khi thầy xóa DB)
-if (app.Environment.IsDevelopment())
-{
-    await app.InitialiseDatabaseAsync();
-}
+// 5. Kích hoạt tự động tạo lại Database (28 bảng Fluent API) & Seed dữ liệu 1-A (Cứu hộ khi thầy xóa DB)
+await app.InitialiseDatabaseAsync();
 
-// 5. Cấu hình HTTP Request Pipeline
+// 6. Cấu hình HTTP Request Pipeline
 if (app.Environment.IsDevelopment())
 {
     app.MapOpenApi();
 }
 
-app.UseMiddleware<ExceptionHandlingMiddleware>();
-
 app.UseHttpsRedirection();
 
 app.UseCors("AllowFrontend");
+
+app.UseAuthentication();
+
+// Middleware kiểm tra tài khoản LOCKED & xử lý ngoại lệ tập trung
+app.UseMiddleware<ExceptionHandlingMiddleware>();
 
 app.UseAuthorization();
 

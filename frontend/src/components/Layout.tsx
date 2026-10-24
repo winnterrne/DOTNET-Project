@@ -242,3 +242,5 @@ export function SharedLayout() {
   if (!user) return <Navigate to="/login" replace />;
   return <Layout role={user.role} />;
 }
+
+export const ProtectedRoute = Layout;

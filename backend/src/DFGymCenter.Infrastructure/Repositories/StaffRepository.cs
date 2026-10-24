@@ -6,7 +6,7 @@ namespace DFGymCenter.Infrastructure.Repositories;
 
 public class StaffRepository : GenericRepository<Staff>, IStaffRepository
 {
-    public StaffRepository(ApplicationDbContext context) : base(context)
+    public StaffRepository(AppDbContext context) : base(context)
     {
     }
 }

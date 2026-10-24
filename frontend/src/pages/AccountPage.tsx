@@ -128,3 +128,6 @@ export function AccountPage() {
     </>
   );
 }
+
+export const ProfileForm = AccountPage;
+export const PasswordChange = AccountPage;

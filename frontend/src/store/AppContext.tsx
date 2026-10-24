@@ -162,3 +162,5 @@ export function AppProvider({ children }: { children: ReactNode }) {
 }
 
 export const useApp = () => useContext(AppCtx);
+export const useAuth = useApp;
+export const AuthProvider = AppProvider;

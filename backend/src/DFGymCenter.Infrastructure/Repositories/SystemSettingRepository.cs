@@ -6,7 +6,7 @@ namespace DFGymCenter.Infrastructure.Repositories;
 
 public class SystemSettingRepository : GenericRepository<SystemSetting>, ISystemSettingRepository
 {
-    public SystemSettingRepository(ApplicationDbContext context) : base(context)
+    public SystemSettingRepository(AppDbContext context) : base(context)
     {
     }
 }

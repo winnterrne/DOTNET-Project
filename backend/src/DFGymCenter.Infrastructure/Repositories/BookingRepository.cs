@@ -6,7 +6,7 @@ namespace DFGymCenter.Infrastructure.Repositories;
 
 public class BookingRepository : GenericRepository<Booking>, IBookingRepository
 {
-    public BookingRepository(ApplicationDbContext context) : base(context)
+    public BookingRepository(AppDbContext context) : base(context)
     {
     }
 }

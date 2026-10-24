@@ -6,7 +6,7 @@ namespace DFGymCenter.Infrastructure.Repositories;
 
 public class MealFormRepository : GenericRepository<MealForm>, IMealFormRepository
 {
-    public MealFormRepository(ApplicationDbContext context) : base(context)
+    public MealFormRepository(AppDbContext context) : base(context)
     {
     }
 }

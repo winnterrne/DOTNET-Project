@@ -7,3 +7,9 @@ public enum UserRole
     Staff = 3,
     Admin = 4
 }
+
+public enum UserStatus
+{
+    Active = 1,
+    Locked = 2
+}

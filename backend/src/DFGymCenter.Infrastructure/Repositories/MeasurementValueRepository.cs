@@ -6,7 +6,7 @@ namespace DFGymCenter.Infrastructure.Repositories;
 
 public class MeasurementValueRepository : GenericRepository<MeasurementValue>, IMeasurementValueRepository
 {
-    public MeasurementValueRepository(ApplicationDbContext context) : base(context)
+    public MeasurementValueRepository(AppDbContext context) : base(context)
     {
     }
 }

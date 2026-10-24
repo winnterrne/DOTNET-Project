@@ -9,14 +9,23 @@ import { fmtDate } from '../../../utils';
 export function StaffMembersScreen() {
   const { db } = useApp();
   const [q, setQ] = useState('');
-  const list = db.users.filter((u) => u.role === 'member' && (!q || u.fullName.toLowerCase().includes(q.toLowerCase()) || u.phone.includes(q) || u.cardCode?.toLowerCase().includes(q.toLowerCase())));
+  const term = q.trim().toLowerCase();
+  const list = db.users.filter(
+    (u) =>
+      u.role === 'member' &&
+      (!term ||
+        u.fullName.toLowerCase().includes(term) ||
+        u.email.toLowerCase().includes(term) ||
+        u.phone.includes(term) ||
+        u.cardCode?.toLowerCase().includes(term)),
+  );
 
   return (
     <>
-      <PageHead title="Tra cứu hội viên" desc="Kiểm tra nhanh hiệu lực gói và trạng thái." />
+      <PageHead title="Tra cứu hội viên" desc="Kiểm tra nhanh hiệu lực gói và trạng thái (tìm theo tên, SĐT, email, mã thẻ)." />
       <div className="input-icon mb16" style={{ maxWidth: 420 }}>
         <Search size={17} />
-        <input className="input" placeholder="Tên, SĐT, mã thẻ..." value={q} onChange={(e) => setQ(e.target.value)} />
+        <input className="input" placeholder="Tên, SĐT, email, mã thẻ..." value={q} onChange={(e) => setQ(e.target.value)} />
       </div>
       <div className="table-wrap">
         <table>
@@ -24,7 +33,7 @@ export function StaffMembersScreen() {
             <tr>
               <th>Hội viên</th>
               <th>Mã thẻ</th>
-              <th>SĐT</th>
+              <th>SĐT / Email</th>
               <th>Gói hiện tại</th>
               <th>Hiệu lực</th>
               <th>Buổi PT</th>
@@ -47,7 +56,10 @@ export function StaffMembersScreen() {
                     </div>
                   </td>
                   <td style={{ fontFamily: 'monospace' }}>{u.cardCode}</td>
-                  <td className="small">{u.phone}</td>
+                  <td className="small">
+                    <div>{u.phone}</div>
+                    <div className="dim">{u.email}</div>
+                  </td>
                   <td>{ms ? L.planById(db, ms.planId)?.name : '—'}</td>
                   <td className="small">{latest ? `${fmtDate(latest.startDate)} → ${fmtDate(latest.endDate)}` : '—'}</td>
                   <td>{bal.total}</td>

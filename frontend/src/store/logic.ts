@@ -140,12 +140,30 @@ export function ptBalance(db: DB, memberId: string, date = todayStr()) {
 /* ------------------------------------------------------------------ */
 const COLORS = ['#7c5cff', '#ff5c8a', '#00c2a8', '#ffb020', '#3fa9ff', '#ff7a45', '#a259ff', '#2ed47a'];
 
-export function register(db: DB, data: { fullName: string; email: string; phone: string; password: string; gender: User['gender']; dob: string }) {
+export function register(
+  db: DB,
+  data: {
+    fullName: string;
+    email: string;
+    phone: string;
+    password: string;
+    gender: User['gender'];
+    dob: string;
+    role?: 'member' | 'trainer';
+    branchId?: string;
+    specialty?: string;
+    experienceYears?: number;
+  },
+) {
   if (db.users.some((u) => u.email.toLowerCase() === data.email.toLowerCase())) fail('Email đã được sử dụng');
   if (data.password.length < 6) fail('Mật khẩu tối thiểu 6 ký tự');
+  const targetRole = data.role === 'trainer' ? 'trainer' : 'member';
+  if (targetRole === 'trainer' && !data.branchId) {
+    fail('Đăng ký Huấn luyện viên bắt buộc phải chọn Chi nhánh làm việc');
+  }
   const user: User = {
     id: uid('u'),
-    role: 'member',
+    role: targetRole,
     email: data.email.trim(),
     password: data.password,
     fullName: data.fullName.trim(),
@@ -156,10 +174,30 @@ export function register(db: DB, data: { fullName: string; email: string; phone:
     avatarColor: COLORS[db.users.length % COLORS.length],
     locked: false,
     createdAt: nowIso(),
-    cardCode: 'DF' + Math.floor(100000 + Math.random() * 899999),
+    branchId: targetRole === 'trainer' ? data.branchId : undefined,
+    cardCode: targetRole === 'member' ? 'DF' + Math.floor(100000 + Math.random() * 899999) : undefined,
+    trainer:
+      targetRole === 'trainer'
+        ? {
+            specialties: (data.specialty || 'Gym, Fitness').split(',').map((s) => s.trim()).filter(Boolean),
+            experienceYears: data.experienceYears ?? 2,
+            certifications: ['Chứng chỉ HLV Thể hình'],
+            bio: 'Huấn luyện viên cá nhân tại DFGymCenter',
+            branchIds: data.branchId ? [data.branchId] : [],
+          }
+        : undefined,
   };
   db.users.push(user);
-  notify(db, user.id, 'Chào mừng đến DFGymCenter!', 'Hãy cập nhật hồ sơ và chỉ số cơ thể ban đầu, sau đó chọn gói tập phù hợp.', 'success', '/member/profile');
+  notify(
+    db,
+    user.id,
+    'Chào mừng đến DFGymCenter!',
+    targetRole === 'trainer'
+      ? 'Hãy cập nhật hồ sơ chuyên môn và lịch rảnh PT của bạn.'
+      : 'Hãy cập nhật hồ sơ và chỉ số cơ thể ban đầu, sau đó chọn gói tập phù hợp.',
+    'success',
+    targetRole === 'trainer' ? '/trainer/profile' : '/member/profile',
+  );
   return user;
 }
 

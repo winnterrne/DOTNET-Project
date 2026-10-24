@@ -6,7 +6,7 @@ namespace DFGymCenter.Infrastructure.Repositories;
 
 public class BodyMeasurementRepository : GenericRepository<BodyMeasurement>, IBodyMeasurementRepository
 {
-    public BodyMeasurementRepository(ApplicationDbContext context) : base(context)
+    public BodyMeasurementRepository(AppDbContext context) : base(context)
     {
     }
 }

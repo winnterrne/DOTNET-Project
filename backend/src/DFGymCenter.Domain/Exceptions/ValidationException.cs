@@ -10,6 +10,15 @@ public class ValidationException : DomainException
         Errors = new Dictionary<string, string[]>();
     }
 
+    public ValidationException(string message)
+        : base(message)
+    {
+        Errors = new Dictionary<string, string[]>
+        {
+            { "General", new[] { message } }
+        };
+    }
+
     public ValidationException(string propertyName, string errorMessage)
         : base(errorMessage)
     {
@@ -25,4 +34,3 @@ public class ValidationException : DomainException
         Errors = errors;
     }
 }
-

@@ -6,7 +6,7 @@ namespace DFGymCenter.Infrastructure.Repositories;
 
 public class AssessmentNoteRepository : GenericRepository<AssessmentNote>, IAssessmentNoteRepository
 {
-    public AssessmentNoteRepository(ApplicationDbContext context) : base(context)
+    public AssessmentNoteRepository(AppDbContext context) : base(context)
     {
     }
 }

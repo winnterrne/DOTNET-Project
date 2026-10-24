@@ -6,7 +6,7 @@ namespace DFGymCenter.Infrastructure.Repositories;
 
 public class MetricTypeRepository : GenericRepository<MetricType>, IMetricTypeRepository
 {
-    public MetricTypeRepository(ApplicationDbContext context) : base(context)
+    public MetricTypeRepository(AppDbContext context) : base(context)
     {
     }
 }

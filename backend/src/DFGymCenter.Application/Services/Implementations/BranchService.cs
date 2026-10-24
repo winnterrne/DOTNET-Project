@@ -12,9 +12,9 @@ namespace DFGymCenter.Application.Services.Implementations;
 /// </summary>
 public class BranchService : IBranchService
 {
-    private readonly IApplicationDbContext _context;
+    private readonly IAppDbContext _context;
 
-    public BranchService(IApplicationDbContext context)
+    public BranchService(IAppDbContext context)
     {
         _context = context;
     }

@@ -108,18 +108,32 @@ export function Login() {
 }
 
 export function Register() {
-  const { user, act, login, toast } = useApp();
+  const { db, user, act, login, toast } = useApp();
   const nav = useNavigate();
-  const [f, setF] = useState({ fullName: '', email: '', phone: '', password: '', confirm: '', gender: 'male' as 'male' | 'female' | 'other', dob: '2000-01-01' });
+  const [f, setF] = useState({
+    role: 'member' as 'member' | 'trainer',
+    branchId: db.branches[0]?.id || '',
+    specialty: 'Gym, HIIT, Cardio',
+    experienceYears: 2,
+    fullName: '',
+    email: '',
+    phone: '',
+    password: '',
+    confirm: '',
+    gender: 'male' as 'male' | 'female' | 'other',
+    dob: '2000-01-01',
+  });
   if (user) return <Navigate to={homeOf(user.role)} replace />;
-  const set = (k: keyof typeof f) => (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => setF({ ...f, [k]: e.target.value });
+  const set = (k: keyof typeof f) => (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) =>
+    setF({ ...f, [k]: k === 'experienceYears' ? +e.target.value : e.target.value });
   const submit = (e: React.FormEvent) => {
     e.preventDefault();
     if (f.password !== f.confirm) return toast('Mật khẩu xác nhận không khớp', 'error');
+    if (f.role === 'trainer' && !f.branchId) return toast('Huấn luyện viên bắt buộc phải chọn Chi nhánh!', 'error');
     const u = act((d) => L.register(d, f), 'Đăng ký thành công!');
     if (u) {
       login(u);
-      nav('/member/profile');
+      nav(u.role === 'trainer' ? '/trainer/profile' : '/member/profile');
     }
   };
   return (
@@ -127,9 +141,50 @@ export function Register() {
       <Hero />
       <div className="auth-form">
         <form className="auth-box" onSubmit={submit}>
-          <h1>Tạo tài khoản hội viên</h1>
-          <p className="muted mt8">Chỉ mất 1 phút để bắt đầu.</p>
+          <h1>Tạo tài khoản mới</h1>
+          <p className="muted mt8">Đăng ký tài khoản Hội viên hoặc Huấn luyện viên (PT).</p>
           <div className="form-grid mt24">
+            <div className="field full">
+              <label>Vai trò đăng ký</label>
+              <div className="chips">
+                <button
+                  type="button"
+                  className={`chip ${f.role === 'member' ? 'on' : ''}`}
+                  onClick={() => setF({ ...f, role: 'member' })}
+                  id="reg-role-member"
+                >
+                  Hội viên (MEMBER)
+                </button>
+                <button
+                  type="button"
+                  className={`chip ${f.role === 'trainer' ? 'on' : ''}`}
+                  onClick={() => setF({ ...f, role: 'trainer', branchId: f.branchId || db.branches[0]?.id || '' })}
+                  id="reg-role-trainer"
+                >
+                  Huấn luyện viên (TRAINER)
+                </button>
+              </div>
+            </div>
+            {f.role === 'trainer' && (
+              <>
+                <div className="field full">
+                  <label>Chi nhánh làm việc (Bắt buộc) *</label>
+                  <select className="input" value={f.branchId} onChange={set('branchId')} required id="reg-branch">
+                    {db.branches.map((b) => (
+                      <option key={b.id} value={b.id}>{b.name}</option>
+                    ))}
+                  </select>
+                </div>
+                <div className="field">
+                  <label>Chuyên môn</label>
+                  <input className="input" value={f.specialty} onChange={set('specialty')} placeholder="Gym, Yoga, HIIT..." />
+                </div>
+                <div className="field">
+                  <label>Số năm kinh nghiệm</label>
+                  <input type="number" min={0} className="input" value={f.experienceYears} onChange={set('experienceYears')} />
+                </div>
+              </>
+            )}
             <div className="field full"><label>Họ và tên</label><div className="input-icon"><UserIcon size={17} /><input id="reg-name" className="input" value={f.fullName} onChange={set('fullName')} required placeholder="Nguyễn Văn A" /></div></div>
             <div className="field"><label>Email</label><div className="input-icon"><Mail size={17} /><input id="reg-email" type="email" className="input" value={f.email} onChange={set('email')} required /></div></div>
             <div className="field"><label>Số điện thoại</label><div className="input-icon"><Phone size={17} /><input id="reg-phone" className="input" value={f.phone} onChange={set('phone')} required pattern="0[0-9]{9}" title="10 chữ số, bắt đầu bằng 0" /></div></div>
@@ -145,3 +200,6 @@ export function Register() {
     </div>
   );
 }
+
+export const LoginForm = Login;
+export const RegisterForm = Register;

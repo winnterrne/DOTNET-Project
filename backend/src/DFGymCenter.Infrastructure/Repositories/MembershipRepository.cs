@@ -6,7 +6,7 @@ namespace DFGymCenter.Infrastructure.Repositories;
 
 public class MembershipRepository : GenericRepository<Membership>, IMembershipRepository
 {
-    public MembershipRepository(ApplicationDbContext context) : base(context)
+    public MembershipRepository(AppDbContext context) : base(context)
     {
     }
 }

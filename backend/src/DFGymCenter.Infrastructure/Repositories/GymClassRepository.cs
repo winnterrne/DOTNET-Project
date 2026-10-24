@@ -6,7 +6,7 @@ namespace DFGymCenter.Infrastructure.Repositories;
 
 public class GymClassRepository : GenericRepository<GymClass>, IGymClassRepository
 {
-    public GymClassRepository(ApplicationDbContext context) : base(context)
+    public GymClassRepository(AppDbContext context) : base(context)
     {
     }
 }

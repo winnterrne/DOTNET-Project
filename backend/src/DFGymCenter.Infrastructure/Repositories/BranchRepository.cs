@@ -6,7 +6,7 @@ namespace DFGymCenter.Infrastructure.Repositories;
 
 public class BranchRepository : GenericRepository<Branch>, IBranchRepository
 {
-    public BranchRepository(ApplicationDbContext context) : base(context)
+    public BranchRepository(AppDbContext context) : base(context)
     {
     }
 }

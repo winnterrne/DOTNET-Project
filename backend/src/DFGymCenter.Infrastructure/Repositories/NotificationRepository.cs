@@ -6,7 +6,7 @@ namespace DFGymCenter.Infrastructure.Repositories;
 
 public class NotificationRepository : GenericRepository<Notification>, INotificationRepository
 {
-    public NotificationRepository(ApplicationDbContext context) : base(context)
+    public NotificationRepository(AppDbContext context) : base(context)
     {
     }
 }

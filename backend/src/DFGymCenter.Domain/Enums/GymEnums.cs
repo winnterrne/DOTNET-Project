@@ -62,4 +62,3 @@ public enum IssueStatus
     Fixed = 3,
     Closed = 4
 }
-

@@ -6,7 +6,7 @@ namespace DFGymCenter.Infrastructure.Repositories;
 
 public class CheckinRepository : GenericRepository<Checkin>, ICheckinRepository
 {
-    public CheckinRepository(ApplicationDbContext context) : base(context)
+    public CheckinRepository(AppDbContext context) : base(context)
     {
     }
 }
