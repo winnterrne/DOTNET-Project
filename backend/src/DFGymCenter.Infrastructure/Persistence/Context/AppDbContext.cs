@@ -12,7 +12,6 @@ public class AppDbContext : DbContext, IAppDbContext, IApplicationDbContext
     {
     }
 
-    // 28 Entities theo sơ đồ ERD chuẩn
     public DbSet<User> Users => Set<User>();
     public DbSet<Staff> Staff => Set<Staff>();
     public DbSet<Trainer> Trainers => Set<Trainer>();

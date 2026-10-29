@@ -34,6 +34,7 @@ import {
   StaffFreeze,
   EquipmentManage,
   StaffMembers,
+  StaffMemberCards,
 } from './pages/staff/StaffPages';
 
 // Admin
@@ -96,6 +97,7 @@ export default function App() {
             <Route path="freeze" element={<StaffFreeze />} />
             <Route path="equipment" element={<EquipmentManage />} />
             <Route path="members" element={<StaffMembers />} />
+            <Route path="member-cards" element={<StaffMemberCards />} />
           </Route>
 
           {/* Admin Routes */}

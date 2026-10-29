@@ -13,6 +13,8 @@ import type {
   EquipmentReport,
   ReportStatus,
   Role,
+  CardStatus,
+  MemberCardRecord,
 } from '../types';
 import {
   uid,
@@ -136,9 +138,237 @@ export function ptBalance(db: DB, memberId: string, date = todayStr()) {
 }
 
 /* ------------------------------------------------------------------ */
-/*  Auth                                                               */
+/*  Auth & Member Cards                                                */
 /* ------------------------------------------------------------------ */
 const COLORS = ['#7c5cff', '#ff5c8a', '#00c2a8', '#ffb020', '#3fa9ff', '#ff7a45', '#a259ff', '#2ed47a'];
+const CARD_ALPHABET = '23456789ABCDEFGHJKLMNPQRSTUVWXYZ';
+
+/**
+ * Sinh Card_Code ngẫu nhiên, duy nhất, không đoán được (Cryptographically random).
+ * Định dạng: DF-XXXX-XXXX
+ */
+export function generateUniqueCardCode(db: DB): string {
+  const makeCode = (): string => {
+    const bytes = new Uint8Array(8);
+    if (typeof crypto !== 'undefined' && crypto.getRandomValues) {
+      crypto.getRandomValues(bytes);
+    } else {
+      for (let i = 0; i < 8; i++) bytes[i] = Math.floor(Math.random() * 256);
+    }
+    let p1 = '';
+    let p2 = '';
+    for (let i = 0; i < 4; i++) p1 += CARD_ALPHABET[bytes[i] % CARD_ALPHABET.length];
+    for (let i = 4; i < 8; i++) p2 += CARD_ALPHABET[bytes[i] % CARD_ALPHABET.length];
+    return `DF-${p1}-${p2}`;
+  };
+
+  let candidate = makeCode();
+  const exists = (code: string) =>
+    db.users.some((u) => u.cardCode?.toUpperCase() === code) ||
+    (db.memberCards ?? []).some((c) => c.cardCode.toUpperCase() === code);
+
+  while (exists(candidate)) {
+    candidate = makeCode();
+  }
+  return candidate;
+}
+
+export function ensureMemberCards(db: DB): MemberCardRecord[] {
+  if (!db.memberCards) {
+    db.memberCards = [];
+  }
+  for (const u of db.users) {
+    if (u.role !== 'member') continue;
+    const cards = db.memberCards.filter((c) => c.memberId === u.id);
+    if (cards.length === 0) {
+      const code = u.cardCode || generateUniqueCardCode(db);
+      const status: CardStatus = u.cardStatus || 'ACTIVE';
+      u.cardCode = code;
+      u.cardStatus = status;
+      db.memberCards.push({
+        id: `mc_${u.id}_init`,
+        memberId: u.id,
+        cardCode: code,
+        status,
+        issuedAt: u.createdAt || nowIso(),
+        reason: 'Cấp thẻ hội viên ban đầu',
+      });
+    } else {
+      const primary =
+        cards.find((c) => c.status === 'ACTIVE') ??
+        cards.find((c) => c.status === 'LOCKED') ??
+        cards[0];
+      u.cardCode = primary.cardCode;
+      u.cardStatus = primary.status;
+    }
+  }
+  return db.memberCards;
+}
+
+export function memberCardsOf(db: DB, memberId: string): MemberCardRecord[] {
+  const list = ensureMemberCards(db).filter((c) => c.memberId === memberId);
+  const rank: Record<CardStatus, number> = { ACTIVE: 3, LOCKED: 2, LOST: 1 };
+  return [...list].sort(
+    (a, b) => rank[b.status] - rank[a.status] || b.issuedAt.localeCompare(a.issuedAt),
+  );
+}
+
+export function activeCardOf(db: DB, memberId: string): MemberCardRecord | undefined {
+  return memberCardsOf(db, memberId)[0];
+}
+
+export function issueMemberCard(
+  db: DB,
+  opts: {
+    memberId: string;
+    staffId?: string;
+    previousCardStatus?: 'LOCKED' | 'LOST';
+    reason?: string;
+  },
+): MemberCardRecord {
+  ensureMemberCards(db);
+  const member = db.users.find((u) => u.id === opts.memberId && u.role === 'member') ?? fail('Không tìm thấy hội viên cần cấp thẻ');
+
+  const oldTargetStatus: CardStatus =
+    opts.previousCardStatus === 'LOST' ||
+    opts.reason?.toLowerCase().includes('mất') ||
+    opts.reason?.toLowerCase().includes('lost')
+      ? 'LOST'
+      : 'LOCKED';
+
+  // Chuyển toàn bộ thẻ ACTIVE hiện tại của hội viên sang LOCKED hoặc LOST
+  db.memberCards!
+    .filter((c) => c.memberId === member.id)
+    .forEach((c) => {
+      if (c.status === 'ACTIVE') {
+        c.status = oldTargetStatus;
+      } else if (oldTargetStatus === 'LOST' && c.status === 'LOCKED') {
+        c.status = 'LOST';
+      }
+    });
+
+  const newCardCode = generateUniqueCardCode(db);
+  const newCard: MemberCardRecord = {
+    id: uid('mc'),
+    memberId: member.id,
+    cardCode: newCardCode,
+    status: 'ACTIVE',
+    issuedAt: nowIso(),
+    issuedBy: opts.staffId,
+    reason: opts.reason || 'Cấp thẻ hội viên mới tại quầy lễ tân',
+  };
+
+  db.memberCards!.unshift(newCard);
+  member.cardCode = newCard.cardCode;
+  member.cardStatus = 'ACTIVE';
+
+  notify(
+    db,
+    member.id,
+    'Đã cấp thẻ hội viên mới',
+    `Thẻ hội viên mới của bạn (${newCard.cardCode}) đã được kích hoạt (ACTIVE). Các thẻ cũ đã tự động chuyển sang ${oldTargetStatus}.`,
+    'success',
+    '/member/card',
+  );
+
+  return newCard;
+}
+
+export function updateMemberCardStatus(
+  db: DB,
+  opts: {
+    cardId: string;
+    status: CardStatus;
+    actorId: string;
+    isStaff: boolean;
+    reason?: string;
+  },
+): MemberCardRecord {
+  ensureMemberCards(db);
+  let card = db.memberCards!.find((c) => c.id === opts.cardId);
+  if (!card) {
+    // Fallback nếu truyền memberId
+    card = activeCardOf(db, opts.cardId);
+  }
+  if (!card) fail('Không tìm thấy thẻ hội viên');
+
+  // Phân quyền: Hội viên chỉ được đặt LOST cho thẻ của chính mình
+  if (!opts.isStaff) {
+    if (card.memberId !== opts.actorId) {
+      fail('Bạn chỉ có quyền thao tác trên thẻ hội viên của chính mình');
+    }
+    if (opts.status !== 'LOST') {
+      fail('Hội viên chỉ được phép báo mất thẻ (LOST) cho thẻ của mình. Vui lòng liên hệ Lễ tân nếu cần mở khóa hoặc cấp thẻ mới');
+    }
+  }
+
+  // State machine: Thẻ đã LOST bị vô hiệu hóa vĩnh viễn
+  if (card.status === 'LOST' && opts.status !== 'LOST') {
+    fail('Thẻ đã báo mất (LOST) bị vô hiệu hóa vĩnh viễn và không thể kích hoạt lại. Vui lòng sử dụng chức năng Cấp thẻ mới');
+  }
+
+  // Nếu mở khóa thẻ thành ACTIVE, các thẻ ACTIVE khác của hội viên chuyển sang LOCKED
+  if (opts.status === 'ACTIVE') {
+    db.memberCards!
+      .filter((c) => c.memberId === card!.memberId && c.id !== card!.id && c.status === 'ACTIVE')
+      .forEach((c) => {
+        c.status = 'LOCKED';
+      });
+  }
+
+  card.status = opts.status;
+  if (opts.reason) card.reason = opts.reason;
+
+  const member = db.users.find((u) => u.id === card!.memberId);
+  if (member) {
+    const primary = activeCardOf(db, member.id);
+    if (primary) {
+      member.cardCode = primary.cardCode;
+      member.cardStatus = primary.status;
+    }
+
+    if (opts.status === 'LOST') {
+      notify(
+        db,
+        member.id,
+        'Thẻ hội viên đã báo mất (LOST)',
+        `Thẻ ${card.cardCode} đã được chuyển sang trạng thái LOST và vô hiệu hóa hoàn toàn. Vui lòng liên hệ quầy lễ tân để được cấp thẻ mới.`,
+        'danger',
+        '/member/card',
+      );
+      if (!opts.isStaff) {
+        notifyRole(
+          db,
+          'receptionist',
+          'Hội viên báo mất thẻ',
+          `Hội viên ${member.fullName} vừa báo mất thẻ ${card.cardCode}. Vui lòng kiểm tra và cấp thẻ mới tại quầy.`,
+          'warning',
+          '/staff/member-cards',
+        );
+      }
+    } else if (opts.status === 'LOCKED') {
+      notify(
+        db,
+        member.id,
+        'Thẻ hội viên đã bị tạm khóa (LOCKED)',
+        `Thẻ ${card.cardCode} của bạn đã bị tạm khóa.${opts.reason ? ` Lý do: ${opts.reason}` : ''}`,
+        'warning',
+        '/member/card',
+      );
+    } else if (opts.status === 'ACTIVE') {
+      notify(
+        db,
+        member.id,
+        'Thẻ hội viên đã được mở khóa (ACTIVE)',
+        `Thẻ ${card.cardCode} của bạn đã được kích hoạt lại và sử dụng bình thường.`,
+        'success',
+        '/member/card',
+      );
+    }
+  }
+
+  return card;
+}
 
 export function register(
   db: DB,
@@ -161,6 +391,7 @@ export function register(
   if (targetRole === 'trainer' && !data.branchId) {
     fail('Đăng ký Huấn luyện viên bắt buộc phải chọn Chi nhánh làm việc');
   }
+  const initialCardCode = targetRole === 'member' ? generateUniqueCardCode(db) : undefined;
   const user: User = {
     id: uid('u'),
     role: targetRole,
@@ -175,7 +406,8 @@ export function register(
     locked: false,
     createdAt: nowIso(),
     branchId: targetRole === 'trainer' ? data.branchId : undefined,
-    cardCode: targetRole === 'member' ? 'DF' + Math.floor(100000 + Math.random() * 899999) : undefined,
+    cardCode: initialCardCode,
+    cardStatus: targetRole === 'member' ? 'ACTIVE' : undefined,
     trainer:
       targetRole === 'trainer'
         ? {
@@ -188,6 +420,17 @@ export function register(
         : undefined,
   };
   db.users.push(user);
+  if (targetRole === 'member' && initialCardCode) {
+    if (!db.memberCards) db.memberCards = [];
+    db.memberCards.unshift({
+      id: uid('mc'),
+      memberId: user.id,
+      cardCode: initialCardCode,
+      status: 'ACTIVE',
+      issuedAt: user.createdAt,
+      reason: 'Tự động cấp thẻ khi đăng ký tài khoản',
+    });
+  }
   notify(
     db,
     user.id,
@@ -224,7 +467,19 @@ export function createStaff(db: DB, data: Partial<User> & { role: Role; email: s
   } as User;
   if (u.role === 'trainer' && !u.trainer)
     u.trainer = { specialties: [], experienceYears: 0, certifications: [], bio: '', branchIds: u.branchId ? [u.branchId] : [] };
-  if (u.role === 'member' && !u.cardCode) u.cardCode = 'DF' + Math.floor(100000 + Math.random() * 899999);
+  if (u.role === 'member' && !u.cardCode) {
+    u.cardCode = generateUniqueCardCode(db);
+    u.cardStatus = 'ACTIVE';
+    if (!db.memberCards) db.memberCards = [];
+    db.memberCards.unshift({
+      id: uid('mc'),
+      memberId: u.id,
+      cardCode: u.cardCode,
+      status: 'ACTIVE',
+      issuedAt: u.createdAt,
+      reason: 'Cấp thẻ hội viên mới',
+    });
+  }
   db.users.push(u);
   return u;
 }
@@ -1082,10 +1337,19 @@ export const openCheckin = (db: DB, memberId: string) =>
   db.checkins.find((c) => c.memberId === memberId && c.result === 'success' && !c.checkOutAt);
 
 export function checkIn(db: DB, opts: { code: string; branchId: string; method: 'card' | 'manual'; staffId?: string; reason?: string }) {
+  ensureMemberCards(db);
   const code = opts.code.trim().toLowerCase();
-  const member = db.users.find(
-    (u) => u.role === 'member' && (u.cardCode?.toLowerCase() === code || u.email.toLowerCase() === code || u.phone === opts.code.trim() || u.id === opts.code),
-  );
+  const matchedCard = db.memberCards?.find((c) => c.cardCode.toLowerCase() === code);
+  const member =
+    (matchedCard ? db.users.find((u) => u.id === matchedCard.memberId) : undefined) ??
+    db.users.find(
+      (u) =>
+        u.role === 'member' &&
+        (u.cardCode?.toLowerCase() === code ||
+          u.email.toLowerCase() === code ||
+          u.phone === opts.code.trim() ||
+          u.id === opts.code),
+    );
   if (!member) fail('Không tìm thấy hội viên với mã thẻ/thông tin này');
   const rec: CheckIn = {
     id: uid('ci'),
@@ -1104,6 +1368,15 @@ export function checkIn(db: DB, opts: { code: string; branchId: string; method: 
     return { record: rec, member: member! };
   };
   if (member!.locked) return deny('Tài khoản bị khóa');
+  if (opts.method === 'card') {
+    const targetCard = matchedCard ?? activeCardOf(db, member!.id);
+    if (targetCard?.status === 'LOST') {
+      return deny(`Thẻ hội viên (${targetCard.cardCode}) đã báo mất (LOST) và bị vô hiệu hóa. Vui lòng liên hệ lễ tân để cấp thẻ mới.`);
+    }
+    if (targetCard?.status === 'LOCKED') {
+      return deny(`Thẻ hội viên (${targetCard.cardCode}) đang bị khóa (LOCKED). Vui lòng liên hệ lễ tân để mở khóa hoặc cấp thẻ mới.`);
+    }
+  }
   if (openCheckin(db, member!.id)) return deny('Hội viên đang trong phòng tập (chưa check-out)');
   const v = checkMembershipValid(db, member!.id, opts.branchId);
   if (!v.ok) return deny(v.reason);

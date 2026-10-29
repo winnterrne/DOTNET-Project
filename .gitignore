@@ -33,3 +33,6 @@ obj/
 *.suo
 *.sln.docstates
 
+# Internal notes and defense documentation
+docs/
+

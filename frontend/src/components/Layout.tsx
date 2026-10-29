@@ -57,6 +57,7 @@ function useNav(role: Role): { section: string; items: NavItem[] }[] {
         { section: 'Tổng quan', items: [{ to: '/staff', label: 'Trang chủ', icon: <LayoutDashboard size={s} />, end: true }] },
         { section: 'Vận hành', items: [
           { to: '/staff/checkin', label: 'Check-in / Check-out', icon: <ScanLine size={s} /> },
+          { to: '/staff/member-cards', label: 'Cấp / Khóa thẻ hội viên', icon: <CreditCard size={s} /> },
           { to: '/staff/history', label: 'Lịch sử check-in', icon: <History size={s} /> },
           { to: '/staff/freeze', label: 'Yêu cầu freeze', icon: <Snowflake size={s} />, count: pendingFreeze },
           { to: '/staff/equipment', label: 'Thiết bị & sự cố', icon: <Wrench size={s} />, count: pendingEq },

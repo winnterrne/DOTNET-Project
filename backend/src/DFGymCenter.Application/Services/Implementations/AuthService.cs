@@ -410,7 +410,8 @@ public class AuthService : IAuthService
                 .OrderByDescending(ms => ms.EndDate)
                 .FirstOrDefault();
 
-            var cardCode = m.MemberCards.FirstOrDefault()?.CardCode;
+            var primaryCard = m.MemberCards.FirstOrDefault(c => c.Status.Equals("ACTIVE", StringComparison.OrdinalIgnoreCase))
+                ?? m.MemberCards.FirstOrDefault();
 
             return new MemberDto
             {
@@ -419,7 +420,9 @@ public class AuthService : IAuthService
                 FullName = m.User.FullName,
                 Email = m.User.Email,
                 Phone = m.User.Phone,
-                CardCode = cardCode,
+                CardId = primaryCard?.Id,
+                CardCode = primaryCard?.CardCode,
+                CardStatus = primaryCard?.Status,
                 Address = m.Address,
                 DateOfBirth = m.DateOfBirth,
                 Gender = m.Gender,
@@ -446,7 +449,8 @@ public class AuthService : IAuthService
             _ => "member"
         };
 
-        var cardCode = user.Member?.MemberCards.FirstOrDefault()?.CardCode;
+        var primaryCard = user.Member?.MemberCards.FirstOrDefault(c => c.Status.Equals("ACTIVE", StringComparison.OrdinalIgnoreCase))
+            ?? user.Member?.MemberCards.FirstOrDefault();
         var branchId = user.Staff?.BranchId ?? user.Trainer?.BranchId;
         var branchName = user.Staff?.Branch?.Name ?? user.Trainer?.Branch?.Name;
 
@@ -461,7 +465,9 @@ public class AuthService : IAuthService
             Status = user.Status == UserStatus.Locked ? "LOCKED" : "ACTIVE",
             CreatedAt = user.CreatedAt,
             MemberId = user.Member?.Id,
-            CardCode = cardCode,
+            CardId = primaryCard?.Id,
+            CardCode = primaryCard?.CardCode,
+            CardStatus = primaryCard?.Status,
             Address = user.Member?.Address,
             DateOfBirth = user.Member?.DateOfBirth,
             Gender = user.Member?.Gender,

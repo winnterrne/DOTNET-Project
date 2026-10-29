@@ -1,4 +1,4 @@
-import type { ClassBookingStatus, PTBookingStatus, EquipmentStatus, ReportStatus, Role, RequestStatus, PaymentMethod } from '../types';
+import type { ClassBookingStatus, PTBookingStatus, EquipmentStatus, ReportStatus, Role, RequestStatus, PaymentMethod, CardStatus } from '../types';
 import type { MStatus } from '../store/logic';
 
 type L = [string, string]; // [label, color]
@@ -66,4 +66,22 @@ export const methodLabel: Record<PaymentMethod, string> = {
   vnpay: 'VNPay',
   card: 'Thẻ quốc tế',
   banking: 'Internet Banking',
+};
+
+export const cardStatusMeta: Record<CardStatus, { label: string; color: 'green' | 'amber' | 'red'; desc: string }> = {
+  ACTIVE: {
+    label: 'Đang hoạt động (ACTIVE)',
+    color: 'green',
+    desc: 'Thẻ hợp lệ, sẵn sàng quét QR tại quầy lễ tân hoặc Kiosk.',
+  },
+  LOCKED: {
+    label: 'Tạm khóa (LOCKED)',
+    color: 'amber',
+    desc: 'Thẻ đang bị tạm khóa. Không thể dùng để check-in cho đến khi Lễ tân mở khóa.',
+  },
+  LOST: {
+    label: 'Đã báo mất (LOST)',
+    color: 'red',
+    desc: 'Thẻ đã báo mất và bị vô hiệu hóa vĩnh viễn. Vui lòng liên hệ Lễ tân để cấp thẻ mới.',
+  },
 };

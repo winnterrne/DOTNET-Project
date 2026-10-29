@@ -14,7 +14,9 @@ public class UserDto
 
     // Thông tin liên kết Member / Trainer / Staff
     public Guid? MemberId { get; set; }
+    public Guid? CardId { get; set; }
     public string? CardCode { get; set; }
+    public string? CardStatus { get; set; }
     public string? Address { get; set; }
     public DateTime? DateOfBirth { get; set; }
     public string? Gender { get; set; }

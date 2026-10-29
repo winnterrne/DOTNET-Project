@@ -23,7 +23,20 @@ export interface User {
   createdAt: string;
   branchId?: string; // receptionist work branch
   cardCode?: string; // member card / QR code
+  cardStatus?: CardStatus; // trạng thái thẻ hiện tại: ACTIVE | LOCKED | LOST
   trainer?: TrainerProfile;
+}
+
+export type CardStatus = 'ACTIVE' | 'LOCKED' | 'LOST';
+
+export interface MemberCardRecord {
+  id: string;
+  memberId: string;
+  cardCode: string;
+  status: CardStatus;
+  issuedAt: string;
+  issuedBy?: string;
+  reason?: string;
 }
 
 export interface Branch {
@@ -321,5 +334,6 @@ export interface DB {
   bodyMetrics: BodyMetric[];
   reviews: Review[];
   notifications: Notification[];
+  memberCards?: MemberCardRecord[];
   settings: Settings;
 }

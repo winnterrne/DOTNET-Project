@@ -2,7 +2,7 @@ import { createContext, useCallback, useContext, useEffect, useMemo, useRef, use
 import type { ReactNode } from 'react';
 import type { DB, User } from '../types';
 import { createSeed } from './seed';
-import { runScheduler } from './logic';
+import { runScheduler, ensureMemberCards } from './logic';
 
 const KEY = 'dfgym_db_v2_hcm';
 const SESSION_KEY = 'dfgym_session_v1';
@@ -39,12 +39,14 @@ function load(): DB {
           bm.hips = 93;
         }
       });
+      ensureMemberCards(parsed);
       return parsed;
     }
   } catch {
     /* ignore */
   }
   const db = createSeed();
+  ensureMemberCards(db);
   runScheduler(db);
   localStorage.setItem(KEY, JSON.stringify(db));
   return db;
@@ -153,6 +155,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     },
     reset: () => {
       const fresh = createSeed();
+      ensureMemberCards(fresh);
       runScheduler(fresh);
       commit(fresh);
       toast('Đã khôi phục dữ liệu demo ban đầu', 'info');

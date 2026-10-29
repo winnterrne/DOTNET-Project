@@ -402,16 +402,21 @@ export function StaffMembers() {
   );
   return (
     <>
-      <PageHead title="Tra cứu hội viên" desc="Kiểm tra nhanh hiệu lực gói và trạng thái." />
+      <PageHead
+        title="Tra cứu hội viên"
+        desc="Kiểm tra nhanh hiệu lực gói và trạng thái."
+        actions={<Link to="/staff/member-cards" className="btn primary">Quản lý Cấp / Khóa Thẻ & QR</Link>}
+      />
       <div className="input-icon mb16" style={{ maxWidth: 420 }}><Search size={17} /><input className="input" placeholder="Tìm theo tên, SĐT, email, mã thẻ..." value={q} onChange={(e) => setQ(e.target.value)} /></div>
       <div className="table-wrap">
         <table>
-          <thead><tr><th>Hội viên</th><th>Mã thẻ</th><th>SĐT / Email</th><th>Gói hiện tại</th><th>Hiệu lực</th><th>Buổi PT</th><th>Trạng thái</th></tr></thead>
-          <tbody>{list.map((u) => { const ms = L.membershipOn(db, u.id); const latest = L.latestPaidMembership(db, u.id); const st = ms ? L.membershipStatus(db, ms) : latest ? L.membershipStatus(db, latest) : null; const bal = L.ptBalance(db, u.id); return (
-            <tr key={u.id}><td><div className="row"><Avatar user={u} size="sm" /><div><b>{u.fullName}</b>{u.locked && <Badge color="red">Khóa</Badge>}</div></div></td><td style={{ fontFamily: 'monospace' }}>{u.cardCode}</td><td className="small"><div>{u.phone}</div><div className="dim">{u.email}</div></td><td>{ms ? L.planById(db, ms.planId)?.name : '—'}</td><td className="small">{latest ? `${fmtDate(latest.startDate)} → ${fmtDate(latest.endDate)}` : '—'}</td><td>{bal.total}</td><td>{st ? <Badge color={mStatusLabel[st][1]}>{mStatusLabel[st][0]}</Badge> : <Badge>Chưa mua</Badge>}</td></tr>); })}</tbody>
+          <thead><tr><th>Hội viên</th><th>Mã thẻ & Trạng thái</th><th>SĐT / Email</th><th>Gói hiện tại</th><th>Hiệu lực</th><th>Buổi PT</th><th>Trạng thái gói</th></tr></thead>
+          <tbody>{list.map((u) => { const ms = L.membershipOn(db, u.id); const latest = L.latestPaidMembership(db, u.id); const st = ms ? L.membershipStatus(db, ms) : latest ? L.membershipStatus(db, latest) : null; const bal = L.ptBalance(db, u.id); const cardSt = L.activeCardOf(db, u.id)?.status ?? u.cardStatus ?? 'ACTIVE'; return (
+            <tr key={u.id}><td><div className="row"><Avatar user={u} size="sm" /><div><b>{u.fullName}</b>{u.locked && <Badge color="red">Khóa</Badge>}</div></div></td><td><div className="row" style={{ gap: 6 }}><span style={{ fontFamily: 'monospace', fontWeight: 700 }}>{u.cardCode}</span><Badge color={cardSt === 'ACTIVE' ? 'green' : cardSt === 'LOCKED' ? 'amber' : 'red'}>{cardSt}</Badge></div></td><td className="small"><div>{u.phone}</div><div className="dim">{u.email}</div></td><td>{ms ? L.planById(db, ms.planId)?.name : '—'}</td><td className="small">{latest ? `${fmtDate(latest.startDate)} → ${fmtDate(latest.endDate)}` : '—'}</td><td>{bal.total}</td><td>{st ? <Badge color={mStatusLabel[st][1]}>{mStatusLabel[st][0]}</Badge> : <Badge>Chưa mua</Badge>}</td></tr>); })}</tbody>
         </table>
       </div>
     </>
   );
 }
 export { Building2 };
+export { StaffMemberCardsScreen as StaffMemberCards } from './screens/StaffMemberCardsScreen';

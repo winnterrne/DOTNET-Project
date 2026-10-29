@@ -1,13 +1,14 @@
 import { useState, useMemo } from 'react';
 import { LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, Legend, CartesianGrid } from 'recharts';
 import {
-  Save, Plus, Scale, Ruler, Percent, Dumbbell, Activity, Receipt, Wrench, QrCode, MapPin, Clock, Trash2, Wifi,
+  Save, Plus, Scale, Ruler, Percent, Dumbbell, Activity, Receipt, Wrench, QrCode, MapPin, Clock, Trash2,
   Sparkles, Utensils, Apple, Eye, Copy, Check, History,
 } from 'lucide-react';
 import { useApp } from '../../store/AppContext';
 import * as L from '../../store/logic';
-import { Avatar, Badge, Empty, Modal, PageHead, StatCard, FakeQR, Tabs } from '../../components/ui';
-import { mStatusLabel, methodLabel, reportLabel, eqLabel } from '../../components/labels';
+import { Avatar, Badge, Empty, Modal, PageHead, StatCard, Tabs } from '../../components/ui';
+import { methodLabel, reportLabel, eqLabel } from '../../components/labels';
+import { MemberCardWidget } from '../../components/member-card';
 import { fmtDate, fmtDateTime, fmtMoney, todayStr, calcBMI, bmiLabel, uid as genId, fmtTime } from '../../utils';
 import type { User, BodyMetric } from '../../types';
 
@@ -63,6 +64,11 @@ export function MemberProfile() {
           </div>
           <div className="row mt16" style={{ justifyContent: 'flex-end' }}><button className="btn" onClick={changePw}>Cập nhật mật khẩu</button></div>
         </div>
+      </div>
+
+      {/* Thẻ hội viên & Mã QR (qrcode.react) + Báo mất thẻ */}
+      <div className="mt24">
+        <MemberCardWidget memberId={user!.id} showHistory />
       </div>
     </>
   );
@@ -1475,35 +1481,14 @@ export function MemberCard() {
   const { db, user } = useApp();
   const cur = L.membershipOn(db, user!.id);
   const plan = cur ? L.planById(db, cur.planId) : undefined;
-  const st = cur ? L.membershipStatus(db, cur) : 'expired';
   const open = L.openCheckin(db, user!.id);
   const history = db.checkins.filter((c) => c.memberId === user!.id).slice(0, 12);
   return (
     <>
-      <PageHead title="Thẻ hội viên" desc="Đưa mã QR này vào máy quét tại quầy để check-in / check-out." />
+      <PageHead title="Thẻ hội viên" desc="Đưa mã QR này vào máy quét tại quầy để check-in / check-out hoặc báo mất thẻ khẩn cấp." />
       <div className="grid g2">
         <div className="col" style={{ gap: 18 }}>
-          <div className="member-card">
-            <div style={{ position: 'relative' }}>
-              <div className="row between">
-                <div className="brand-name">DFGym<span style={{ color: '#ff8fb0' }}>Center</span></div>
-                <Wifi size={22} style={{ transform: 'rotate(90deg)', opacity: 0.7 }} />
-              </div>
-              <div className="row between mt24" style={{ alignItems: 'flex-end' }}>
-                <div>
-                  <div className="small" style={{ opacity: 0.7 }}>Hội viên</div>
-                  <div style={{ fontSize: 22, fontWeight: 800 }}>{user!.fullName}</div>
-                  <div style={{ fontFamily: 'monospace', fontSize: 18, letterSpacing: 3, marginTop: 6 }}>{user!.cardCode}</div>
-                  <div className="row mt16">
-                    {plan ? <Badge color="pink">{plan.name}</Badge> : <Badge color="gray">Chưa có gói</Badge>}
-                    <Badge color={mStatusLabel[st][1]}>{mStatusLabel[st][0]}</Badge>
-                  </div>
-                  {cur && <div className="small mt8" style={{ opacity: 0.75 }}>HSD: {fmtDate(cur.endDate)}</div>}
-                </div>
-                <FakeQR text={user!.cardCode ?? user!.id} size={120} />
-              </div>
-            </div>
-          </div>
+          <MemberCardWidget memberId={user!.id} showHistory />
           <div className="card">
             {open ? (
               <div className="row"><span className="live-dot" /><div><b>Đang tập tại {L.branchById(db, open.branchId)?.name}</b><div className="small muted">Check-in lúc {fmtTime(open.checkInAt)} · nhớ check-out khi ra về (tự động check-out lúc đóng cửa)</div></div></div>

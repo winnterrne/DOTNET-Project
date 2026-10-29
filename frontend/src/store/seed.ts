@@ -56,6 +56,7 @@ export function createSeed(): DB {
     bodyMetrics: [],
     reviews: [],
     notifications: [],
+    memberCards: [],
     settings: { reminderHours: 2, cancelDeadlineHours: 4, waitlistCutoffHours: 8, expiryWarningDays: 7, ptLowSessions: 2 },
   };
 
@@ -101,7 +102,28 @@ export function createSeed(): DB {
     ['m16', 'Châu Ánh Tuyết', 'female'],
   ];
   const joinedAgo = [60, 120, 230, 190, 100, 45, 75, 95, 300, 260, 25, 150, 170, 12, 210, 140];
-  memberNames.forEach(([mid, name, g], i) =>
+  const seedCardCodes = [
+    'DF-9K4M-7P2X',
+    'DF-3H8N-5W6Q',
+    'DF-7T2V-4R9B',
+    'DF-6C5J-8M3D',
+    'DF-2P9L-6K4F',
+    'DF-8W3G-2Y7N',
+    'DF-4R7X-9B5T',
+    'DF-5M6Q-3H8V',
+    'DF-9D2K-7F4P',
+    'DF-3N8B-5T6W',
+    'DF-7Q4H-2V9M',
+    'DF-6F5P-8K3R',
+    'DF-2Y9T-4W7C',
+    'DF-8B3M-6N5J',
+    'DF-4V7R-9P2L',
+    'DF-5K6D-3Q8X',
+  ];
+  memberNames.forEach(([mid, name, g], i) => {
+    const code = seedCardCodes[i] || `DF-8A${i}K-9M${i}P`;
+    const status = mid === 'm5' ? 'LOCKED' : mid === 'm8' ? 'LOST' : 'ACTIVE';
+    const created = iso(addDays(T, -joinedAgo[i]));
     db.users.push(
       base({
         id: mid,
@@ -110,12 +132,33 @@ export function createSeed(): DB {
         fullName: name,
         gender: g,
         dob: `199${i % 10}-0${(i % 9) + 1}-1${i % 9}`,
-        cardCode: 'DF' + String(100001 + i),
-        createdAt: iso(addDays(T, -joinedAgo[i])),
+        cardCode: code,
+        cardStatus: status,
+        createdAt: created,
         address: pick(['Quận 1, TP.HCM', 'Quận 3, TP.HCM', 'Quận 7, TP.HCM', 'Quận Bình Thạnh, TP.HCM', 'Quận Phú Nhuận, TP.HCM', 'TP. Thủ Đức, TP.HCM', 'Quận 10, TP.HCM']),
       }),
-    ),
-  );
+    );
+    db.memberCards!.push({
+      id: `mc_${mid}_1`,
+      memberId: mid,
+      cardCode: code,
+      status,
+      issuedAt: created,
+      issuedBy: 'rc1',
+      reason: status === 'LOST' ? 'Hội viên báo mất thẻ qua ứng dụng' : status === 'LOCKED' ? 'Tạm khóa thẻ theo yêu cầu xác minh' : 'Cấp thẻ hội viên',
+    });
+    if (mid === 'm1') {
+      db.memberCards!.push({
+        id: 'mc_m1_old',
+        memberId: 'm1',
+        cardCode: 'DF-4X2A-8L5K',
+        status: 'LOST',
+        issuedAt: iso(addDays(T, -58)),
+        issuedBy: 'rc1',
+        reason: 'Báo mất thẻ cũ, đã cấp lại thẻ mới DF-9K4M-7P2X',
+      });
+    }
+  });
 
   /* ---------------- memberships & payments ---------------- */
   const methods: PaymentMethod[] = ['momo', 'vnpay', 'card', 'banking'];

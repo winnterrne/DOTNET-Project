@@ -3,6 +3,7 @@ import { Save, KeyRound } from 'lucide-react';
 import { useApp } from '../store/AppContext';
 import { Avatar, PageHead, Badge } from '../components/ui';
 import { roleLabel } from '../components/labels';
+import { MemberCardWidget } from '../components/member-card';
 import * as L from '../store/logic';
 
 export function AccountPage() {
@@ -125,6 +126,12 @@ export function AccountPage() {
           </div>
         </div>
       </div>
+
+      {user.role === 'member' && (
+        <div className="mt24">
+          <MemberCardWidget memberId={user.id} showHistory />
+        </div>
+      )}
     </>
   );
 }

@@ -7,3 +7,4 @@ export * from './bookingsApi';
 export * from './classesApi';
 export * from './membershipPlansApi';
 export * from './checkinsApi';
+export * from './memberCard.service';

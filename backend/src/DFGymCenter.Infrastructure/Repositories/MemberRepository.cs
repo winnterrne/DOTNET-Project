@@ -21,6 +21,16 @@ public class MemberRepository : GenericRepository<Member>, IMemberRepository
             .FirstOrDefaultAsync(m => m.UserId == userId, cancellationToken);
     }
 
+    public async Task<Member?> GetByIdOrUserIdWithDetailsAsync(Guid idOrUserId, CancellationToken cancellationToken = default)
+    {
+        return await _context.Members
+            .Include(m => m.User)
+            .Include(m => m.MemberCards)
+            .Include(m => m.Memberships)
+                .ThenInclude(ms => ms.Plan)
+            .FirstOrDefaultAsync(m => m.Id == idOrUserId || m.UserId == idOrUserId, cancellationToken);
+    }
+
     public async Task<IReadOnlyList<Member>> SearchMembersAsync(string? search = null, CancellationToken cancellationToken = default)
     {
         var query = _context.Members
@@ -48,14 +58,12 @@ public class MemberRepository : GenericRepository<Member>, IMemberRepository
 
     public async Task<string> GenerateNextCardCodeAsync(CancellationToken cancellationToken = default)
     {
-        var count = await _context.MemberCards.CountAsync(cancellationToken);
-        var nextNum = 1001 + count;
-        var candidate = $"DF-{nextNum}";
-        while (await _context.MemberCards.AnyAsync(mc => mc.CardCode == candidate, cancellationToken))
+        string candidate;
+        do
         {
-            nextNum++;
-            candidate = $"DF-{nextNum}";
-        }
+            candidate = MemberCardRepository.GenerateCryptographicCardCode();
+        } while (await _context.MemberCards.AnyAsync(mc => mc.CardCode == candidate, cancellationToken));
+
         return candidate;
     }
 }
