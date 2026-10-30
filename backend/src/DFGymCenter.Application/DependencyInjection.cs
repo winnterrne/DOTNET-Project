@@ -1,5 +1,6 @@
 using DFGymCenter.Application.Services.Implementations;
 using DFGymCenter.Application.Services.Interfaces;
+using DFGymCenter.Domain.Interfaces;
 using Microsoft.Extensions.DependencyInjection;
 
 namespace DFGymCenter.Application;
@@ -11,7 +12,7 @@ public static class DependencyInjection
         services.AddScoped<IBranchService, BranchService>();
         services.AddScoped<IAuthService, AuthService>();
         services.AddScoped<IMemberCardService, MemberCardService>();
-
+        services.AddScoped<ICheckinService, CheckinService>();
         return services;
     }
 }
